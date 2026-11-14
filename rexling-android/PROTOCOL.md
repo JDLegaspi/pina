@@ -957,3 +957,13 @@ This does not expose or make already-sent remote terminal text editable by IMEs.
 
 The server editor places its icon selector beside the name and uses settings
 font sizes. A compact SSH-key section keeps import, paste and removal together.
+
+### Superseded navigation
+
+The native session publishes the latest accepted pane/session navigation ID before
+its actor consumes the queue. Obsolete pane/session selections and their takeover
+or resize requests are skipped before execution. Queue rejection does not advance
+this watermark. Input, paste, release and mutations retain their ordering and
+existing target checks. A request already sent is allowed to finish; an obsolete
+non-transport error cannot acknowledge or overwrite the latest navigation. Transport
+failures still use normal recovery, and uncertain input is never replayed.

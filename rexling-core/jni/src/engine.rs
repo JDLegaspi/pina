@@ -11,7 +11,7 @@ use std::{
     collections::{BTreeMap,BTreeSet,VecDeque},
     future::{Future, pending},
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::{AtomicU64,Ordering}},
     time::Duration,
 };
 use tokio::sync::mpsc;
@@ -27,6 +27,7 @@ pub struct Shared {
     pub wire: crate::updates::WireBase,
 }
 pub struct Session {
+    latest_navigation: Arc<AtomicU64>,
     tx: mpsc::Sender<Value>,
     pub shared: Arc<Mutex<Shared>>,
     pub updates: Arc<crate::updates::Updates>,
@@ -42,6 +43,8 @@ impl Session {
             key: String::new(),
             wire: crate::updates::WireBase::default(),activity:Arc::default(),
         }));
+        let latest_navigation=Arc::new(AtomicU64::new(0));
+        let worker_navigation=latest_navigation.clone();
         let worker = shared.clone();
         let updates=Arc::new(crate::updates::Updates::default());
         let notifier=updates.clone();
@@ -52,15 +55,22 @@ impl Session {
                     .enable_all()
                     .build();
                 if let Ok(runtime) = runtime {
-                    runtime.block_on(Actor::new(worker,notifier).run(rx));
+                    let mut actor=Actor::new(worker,notifier);
+                    actor.latest_navigation=worker_navigation;
+                    runtime.block_on(actor.run(rx));
                 }
             })?;
-        Ok(Self { tx, shared, updates })
+        Ok(Self { latest_navigation, tx, shared, updates })
     }
     pub fn command(&self, value: Value) -> Result<()> {
-        self.tx
-            .try_send(value)
-            .context("terminal command queue is full or closed")
+        // Publish intent at admission, even while the actor awaits an older RPC.
+        // A refused command must not supersede work that was actually accepted.
+        let permit=self.tx.try_reserve().context("terminal command queue is full or closed")?;
+        if matches!(value["type"].as_str(),Some("block"|"session")) {
+            if let Some(id)=value["navigationId"].as_u64() {self.latest_navigation.fetch_max(id,Ordering::AcqRel);}
+        }
+        permit.send(value);
+        Ok(())
     }
     pub fn poll(&self, after: u64) -> Result<String> {
         let mut state = self
@@ -187,6 +197,7 @@ type ConnectTask = Pin<Box<dyn Future<Output = Result<Control>>>>;
 type ProgramTask = Pin<Box<dyn Future<Output = Result<Value>>>>;
 type SummaryTask = Pin<Box<dyn Future<Output = Result<Value>>>>;
 struct Actor {
+    latest_navigation: Arc<AtomicU64>,
     shared: Arc<Mutex<Shared>>,
     updates: Arc<crate::updates::Updates>,
     visible: bool,
@@ -261,6 +272,7 @@ struct Actor {
 impl Actor {
     fn new(shared: Arc<Mutex<Shared>>,updates: Arc<crate::updates::Updates>) -> Self {
         Self {
+            latest_navigation:Arc::new(AtomicU64::new(0)),
             shared,
             updates,
             visible: true,
@@ -839,16 +851,21 @@ impl Actor {
         Target {session:self.selected_session.clone(),block:self.selected_block.clone(),navigation:self.navigation_id,connection:self.connection_epoch}
     }
     fn command_error(&mut self,error:anyhow::Error,navigation:Option<u64>,input:bool) {
-        if let Some(id)=navigation {self.navigation_id=id;}
+        let superseded=navigation.is_some_and(|id|id<self.latest_navigation.load(Ordering::Acquire));
+        if !superseded {if let Some(id)=navigation {self.navigation_id=self.navigation_id.max(id);}}
         self.creating=false;
         let message=error.to_string();
         if message.contains("timed out") || message.contains("WebSocket") {
             self.recover(error);
             if input {self.notice="Request outcome is uncertain; input was not resent".into();self.publish();}
-        } else {self.error=message;self.publish();}
+        } else if !superseded {self.error=message;self.publish();}
     }
     async fn execute_command(&mut self,value:Value) {
         let navigation=value["navigationId"].as_u64();
+        // Only replaceable navigation/control work is skipped. Mutations, input,
+        // paste and release retain their original ordering and target checks.
+        if matches!(value["type"].as_str(),Some("block"|"session"|"take"|"resize")) &&
+            navigation.is_some_and(|id|id<self.latest_navigation.load(Ordering::Acquire)) {return;}
         let tab_move=if value["type"]=="move_tab" {value["requestId"].as_u64()} else {None};
         let pane_move=if value["type"]=="move_pane" {value["requestId"].as_u64()} else {None};
         if let Err(error)=self.command(value).await {self.command_error(error,navigation,false);}
@@ -1821,6 +1838,49 @@ fn frame_value(frame: &Frame) -> Value {
 
 #[cfg(test)]
 mod tests {
+    fn navigation_actor()->Actor {
+        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
+        Actor::new(shared,Arc::new(crate::updates::Updates::default()))
+    }
+    #[test] fn navigation_intent_is_published_only_for_accepted_navigation() {
+        let (tx,mut rx)=mpsc::channel(1);
+        let actor=navigation_actor();
+        let session=Session {tx,latest_navigation:actor.latest_navigation.clone(),shared:actor.shared.clone(),updates:actor.updates.clone()};
+        session.command(json!({"type":"block","navigationId":2})).unwrap();
+        assert_eq!(session.latest_navigation.load(Ordering::Acquire),2);
+        assert!(session.command(json!({"type":"session","navigationId":9})).is_err());
+        assert_eq!(session.latest_navigation.load(Ordering::Acquire),2,"a full queue must not publish a rejected intent");
+        rx.try_recv().unwrap();
+        session.command(json!({"type":"resize","navigationId":99})).unwrap();rx.try_recv().unwrap();
+        assert_eq!(session.latest_navigation.load(Ordering::Acquire),2,"resize is not a new user selection");
+        session.command(json!({"type":"session","navigationId":1})).unwrap();
+        assert_eq!(session.latest_navigation.load(Ordering::Acquire),2,"out-of-order admission cannot lower the latest selection");
+    }
+    #[tokio::test] async fn superseded_navigation_and_control_work_never_start() {
+        let mut actor=navigation_actor();
+        actor.latest_navigation.store(3,Ordering::Release);
+        actor.selected_session="s".into();actor.selected_block="original".into();
+        for kind in ["block","session","take","resize"] {
+            for id in [1,2] {
+                actor.execute_command(json!({"type":kind,"id":"obsolete","navigationId":id})).await;
+                assert_eq!(actor.navigation_id,0);assert_eq!(actor.selected_block,"original");assert!(actor.error.is_empty());
+            }
+        }
+        actor.execute_command(json!({"type":"block","id":"latest","navigationId":3})).await;
+        assert_eq!(actor.navigation_id,3);assert_eq!(actor.selected_block,"latest");
+        assert!(!actor.error.is_empty(),"the latest request actually executes, even without a test server");
+        actor.execute_command(json!({"type":"move_tab","requestId":44,"navigationId":1})).await;
+        assert_eq!(actor.tab_move_id,44,"mutations must retain their outcome acknowledgements");
+    }
+    #[test] fn an_old_navigation_failure_cannot_acknowledge_or_erase_new_intent() {
+        let mut actor=navigation_actor();actor.latest_navigation.store(3,Ordering::Release);
+        actor.navigation_id=2;actor.error="current error".into();
+        actor.command_error(anyhow::anyhow!("old pane vanished"),Some(1),false);
+        assert_eq!(actor.navigation_id,2);assert_eq!(actor.error,"current error");
+        actor.command_error(anyhow::anyhow!("latest pane vanished"),Some(3),false);
+        assert_eq!(actor.navigation_id,3);assert_eq!(actor.error,"latest pane vanished");
+    }
+
     use super::*;
     #[test]
     fn terminal_edits_validate_targets_names_and_layout_before_sending() {
