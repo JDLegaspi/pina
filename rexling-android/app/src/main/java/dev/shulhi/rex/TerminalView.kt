@@ -622,31 +622,20 @@ class TerminalView(context: Context) : View(context) {
         val connection=object : BaseInputConnection(this, true) {
             private var batchDepth=0
             private var pendingCommit=false
-            private var sentText=""
-            private var sentCursor=0
+            private val imeLine=TerminalImeLine()
             private fun active()=controlled && interactive && imageTarget==imageInputTarget() && imeEditable===editor
             override fun getEditable(): android.text.Editable = editor
             private fun sync() {
                 val text=editor.toString()
-                composing=if(text.startsWith(sentText) && sentCursor==sentText.length) text.substring(sentText.length) else ""
-                composingCursor=(android.text.Selection.getSelectionEnd(editor)-sentText.length).coerceIn(0,composing.length)
+                composing=if(text.startsWith(imeLine.text) && imeLine.cursor==imeLine.text.length) text.substring(imeLine.text.length) else ""
+                composingCursor=(android.text.Selection.getSelectionEnd(editor)-imeLine.text.length).coerceIn(0,composing.length)
                 invalidate()
                 if(batchDepth==0) (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).updateSelection(this@TerminalView,
                     android.text.Selection.getSelectionStart(editor),android.text.Selection.getSelectionEnd(editor),
                     getComposingSpanStart(editor),getComposingSpanEnd(editor))
             }
             private fun submit(text: String,cursor: Int) {
-                if(text==sentText && cursor==sentCursor) return
-                var prefix=0
-                while(prefix<minOf(sentText.length,text.length) && sentText[prefix]==text[prefix]) prefix++
-                if(prefix>0 && prefix<sentText.length && Character.isLowSurrogate(sentText[prefix])) prefix--
-                val keys=buildString {
-                    repeat(sentText.codePointCount(sentCursor,sentText.length)) {append("\u001b[C")}
-                    repeat(sentText.codePointCount(prefix,sentText.length)) {append('\u007f')}
-                    append(text.substring(prefix))
-                    repeat(text.codePointCount(cursor,text.length)) {append("\u001b[D")}
-                }
-                sentText=text;sentCursor=cursor
+                val keys=imeLine.edit(text,cursor)
                 if(keys.isNotEmpty()) {
                     deliveringImeInput=true
                     try {onInput(keys)} finally {deliveringImeInput=false}
@@ -656,7 +645,7 @@ class TerminalView(context: Context) : View(context) {
                 if(!active()) return
                 submit(editor.toString(),android.text.Selection.getSelectionEnd(editor).coerceIn(0,editor.length))
                 BaseInputConnection.removeComposingSpans(editor)
-                editor.clear();android.text.Selection.setSelection(editor,0);sentText="";sentCursor=0
+                editor.clear();android.text.Selection.setSelection(editor,0);imeLine.reset()
                 sync()
             }
             private fun commitPending() {
@@ -666,7 +655,7 @@ class TerminalView(context: Context) : View(context) {
                 val end=if(start<0) editor.length else start
                 submit(editor.substring(0,end),if(start<0) android.text.Selection.getSelectionEnd(editor).coerceIn(0,end) else end)
                 if(!keyboardSuggestions || editor.length>8192 || editor.any {it<' '}) {
-                    editor.clear();android.text.Selection.setSelection(editor,0);sentText="";sentCursor=0
+                    editor.clear();android.text.Selection.setSelection(editor,0);imeLine.reset()
                 }
                 sync()
             }

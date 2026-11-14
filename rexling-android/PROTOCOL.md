@@ -967,3 +967,12 @@ this watermark. Input, paste, release and mutations retain their ordering and
 existing target checks. A request already sent is allowed to finish; an obsolete
 non-transport error cannot acknowledge or overwrite the latest navigation. Transport
 failures still use normal recovery, and uncertain input is never replayed.
+
+### IME correction model
+
+`TerminalImeLine` models only text sent through one active InputConnection. It
+calculates cursor-aware changes without reading terminal output. External-action
+flushes and connection invalidation retain their existing behavior. The extraction
+does not change keyboard types, restart/focus policy, composition batching or the
+button row. Tests check both resulting text and remote cursor after corrections,
+Unicode edits, context resets, long replacements and randomized editing sequences.
