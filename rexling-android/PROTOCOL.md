@@ -976,3 +976,26 @@ flushes and connection invalidation retain their existing behavior. The extracti
 does not change keyboard types, restart/focus policy, composition batching or the
 button row. Tests check both resulting text and remote cursor after corrections,
 Unicode edits, context resets, long replacements and randomized editing sequences.
+
+### Smooth text scrollback (RXT5)
+
+Local scrollback is handled independently of queued input. libghostty captures up
+to four spare text rows above and below the viewport. Android draws the sub-row
+remainder and compensates for whole rows awaiting a native frame, bounded to the
+captured rows. At rest the grid settles on whole rows. Application wheel events
+keep their existing behavior; image-bearing frames retain whole-row movement
+until image placements outside the viewport can be represented completely.
+
+RXT5 is an app-local JNI format, not a Rex server protocol change. A signed i16 row
+shift precedes the changed-row count. Shifted rows are validated against content,
+and uncovered rows must be present. Overscan sides follow the changed rows: a u8
+count then normal row records; 255 retains that side from a valid delta base.
+Full frames cannot retain old overscan. Image framing follows the RXT4 layout.
+Older RXT1–RXT4 fixtures remain readable. Content reuse also re-tags cell/link row
+coordinates. Interior cached row drawings move using the known viewport offset;
+padded edge rows and changed content are recorded again. Stopping a fling snaps
+before hit testing, and the stop tap cannot activate a link or terminal action.
+
+The implementation adapts michaelcosj/rexling's smooth-scroll work, with offset-
+based row reuse, unchanged-overscan reuse, bounded fractional movement, explicit
+image fallback and stop-tap handling. Source attribution is in THIRD_PARTY_NOTICES.

@@ -385,6 +385,8 @@ impl Actor {
                         else {self.commands.clear();if let Err(error)=self.release_selected().await {self.recover(error);}self.publish();}
                         continue;
                     }
+                    // Local scrollback does not issue RPCs or mutate input ownership.
+                    if value["type"]=="scroll" {self.execute_command(value).await;continue;}
                     if matches!(value["type"].as_str(),Some("connect"|"retry"|"network"|"resume"|"activity")) {maintenance_at=tokio::time::Instant::now();}
                     if value["type"]=="network" {
                         self.execute_command(value).await;

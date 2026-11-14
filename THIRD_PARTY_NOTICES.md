@@ -5,6 +5,7 @@ replace licenses or grant trademark rights for the following upstream material.
 
 | Material | Retained terms and provenance |
 | --- | --- |
+| Smooth-scrollback implementation | Adapted from michaelcosj/rexling commit `601c3852fe4ff4db6fcb201d059266c1fe37506c`, by michael; Apache 2.0. Local changes preserve Rexling input semantics and replace row-cache shift search with offset-based reuse. |
 | Ghostty/libghostty-vt | MIT; `rexling-core/native/GHOSTTY_LICENSE.txt`, pinned source in `ghostty-source.json`, and Android `assets/licenses/GHOSTTY_LICENSE.txt` |
 | JetBrains Mono / Nerd Font font files | SIL Open Font License and Nerd Fonts notices, sources and checksums in `rexling-android/app/src/main/assets/licenses/` |
 | Noto Sans Symbols 2 fallback font | SIL Open Font License; `NOTO_SYMBOLS_OFL.txt` and pinned source/checksum in `NOTO_SYMBOLS_SOURCE.json` in the Android license assets |
