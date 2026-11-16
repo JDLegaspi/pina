@@ -12,6 +12,7 @@ typedef struct {
   uint64_t scroll_total, scroll_offset, scroll_visible;
   uint8_t input_flags;
   uint16_t overscan_above, overscan_below;
+  uint8_t cursor_style, cursor_blinking;
 } RpFrame;
 /* Overscan rows keep a distinct y above any real grid row:
    RP_ABOVE|k is k rows over the viewport (k>=1), RP_BELOW|k is k rows
@@ -96,7 +97,11 @@ uint8_t *rp_graphics_alloc(const GhosttyAllocator *allocator,size_t len) {
 }
 static int configure(RpTerminal *t) {
   size_t limit = 65536;
+  // Match a graphical terminal default. libghostty preserves explicit
+  // DECSCUSR styles when this is set after restoring a snapshot.
+  bool cursor_blink=true;
   int r = ghostty_terminal_set(t->terminal, GHOSTTY_TERMINAL_OPT_USERDATA, t);
+  if(r==0)r=ghostty_terminal_set(t->terminal,GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_BLINK,&cursor_blink);
   if(r==0)r=ghostty_terminal_set(t->terminal,GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE,(const void *)clipboard_write);
   if(r==0)r=ghostty_terminal_set(t->terminal,GHOSTTY_TERMINAL_OPT_RENDER_HOLD,(const void *)render_hold);
   if(r==0)r=ghostty_terminal_set(t->terminal,GHOSTTY_TERMINAL_OPT_SEMANTIC_PROMPT,(const void *)semantic_prompt);
@@ -392,6 +397,7 @@ int rp_frame(RpTerminal *t, RpFrame *frame, CellFn callback, void *userdata) {
   frame->overscan_above=captured.above;frame->overscan_below=captured.below;
   frame->cursor_x=cursor.viewport_x; frame->cursor_y=cursor.viewport_y;
   frame->cursor_visible=cursor.visible && cursor.viewport_has_value;
+  frame->cursor_style=(uint8_t)cursor.visual_style;frame->cursor_blinking=cursor.blinking;
   // A restored terminal can have command boundaries while its cursor is in output.
   if(!(frame->input_flags&2) && !t->semantic_scanned && !t->semantic_seen) {
     t->semantic_scanned=true;

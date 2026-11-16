@@ -31,16 +31,29 @@ import kotlin.math.max
 internal enum class TerminalLinkAction { OPEN, COPY_ADDRESS, SHARE }
 
 class TerminalView(context: Context) : View(context) {
+    private var cursorLit=true
+    private fun cursorCanBlink(): Boolean = screen?.let {it.cursorBlinking && it.cursorX!=null && it.cursorY!=null && it.scroll.below==0L}==true && interactive && isAttachedToWindow && isShown && hasWindowFocus()
+    private val cursorTick=object: Runnable {
+        override fun run() {
+            if(!cursorCanBlink()) {cursorLit=true;return}
+            cursorLit=!cursorLit;invalidate();postDelayed(this,500)
+        }
+    }
+    private fun refreshCursorBlink() {
+        removeCallbacks(cursorTick);cursorLit=true
+        if(cursorCanBlink()) postDelayed(cursorTick,500)
+        invalidate()
+    }
     private val awake=TerminalAwake(this)
     internal var keepAwakeMode: KeepScreenAwake
         get()=awake.mode
         set(value) {awake.mode=value}
-    override fun onAttachedToWindow() {super.onAttachedToWindow();awake.update()}
-    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {super.onWindowFocusChanged(hasWindowFocus);awake.update()}
-    override fun onWindowVisibilityChanged(visibility: Int) {super.onWindowVisibilityChanged(visibility);awake.update()}
+    override fun onAttachedToWindow() {super.onAttachedToWindow();awake.update();refreshCursorBlink()}
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {super.onWindowFocusChanged(hasWindowFocus);awake.update();refreshCursorBlink()}
+    override fun onWindowVisibilityChanged(visibility: Int) {super.onWindowVisibilityChanged(visibility);awake.update();refreshCursorBlink()}
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {if(event.actionMasked==MotionEvent.ACTION_DOWN) awake.activity();return super.dispatchTouchEvent(event)}
     var interactive = true
-        set(value) {if(field!=value) {field=value;if(!value) clearSelection()}}
+        set(value) {if(field!=value) {field=value;if(!value) clearSelection();refreshCursorBlink()}}
     private var selection: TerminalSelection?=null
     private var selectionMode: ActionMode?=null
     private var selectionLink: TerminalLink?=null
@@ -108,9 +121,11 @@ class TerminalView(context: Context) : View(context) {
     private fun setScreen(value: TerminalScreen?,onDisplayFrame: Boolean) {
         if(currentScreen===value) return
         if(value!=null && value!=currentScreen) awake.activity()
+        val resetCursor=currentScreen?.let {it.cursorX!=value?.cursorX || it.cursorY!=value?.cursorY || it.cursorStyle!=value?.cursorStyle || it.cursorBlinking!=value?.cursorBlinking || it.scroll.below!=value?.scroll?.below} ?: true
         val columns=currentScreen?.columns;val rows=currentScreen?.rows;currentScreen=value;frameTraceToken=null
         if(columns!=value?.columns || rows!=value?.rows) {scrollMotion.reset();configureRendering()}
         reportCursorViewport()
+        if(resetCursor) refreshCursorBlink()
         if(onDisplayFrame) invalidate() else postInvalidateOnAnimation()
     }
     var keyboardSuggestions: Boolean = true
@@ -282,8 +297,20 @@ class TerminalView(context: Context) : View(context) {
             val x = frame.cursorX * cellWidth; val y = frame.cursorY * cellHeight
             val cursorWidth=max(1,cell?.width ?: 1)*cellWidth
             backgroundPaint.color=palette.accent
-            canvas.drawRect(x,y,x+cursorWidth,y+cellHeight,backgroundPaint)
-            if(cell!=null && cell.text.isNotEmpty() && cell.attributes and 16==0) {
+            if(cursorLit) {
+                val thickness=max(1f,resources.displayMetrics.density*1.5f)
+                when(frame.cursorStyle) {
+                    0->canvas.drawRect(x,y,x+thickness,y+cellHeight,backgroundPaint)
+                    2->canvas.drawRect(x,y+cellHeight-thickness,x+cursorWidth,y+cellHeight,backgroundPaint)
+                    3->{
+                        backgroundPaint.style=Paint.Style.STROKE;backgroundPaint.strokeWidth=thickness
+                        canvas.drawRect(x+thickness/2,y+thickness/2,x+cursorWidth-thickness/2,y+cellHeight-thickness/2,backgroundPaint)
+                        backgroundPaint.style=Paint.Style.FILL
+                    }
+                    else->canvas.drawRect(x,y,x+cursorWidth,y+cellHeight,backgroundPaint)
+                }
+            }
+            if(cursorLit && frame.cursorStyle==1 && cell!=null && cell.text.isNotEmpty() && cell.attributes and 16==0) {
                 paint.color=palette.cursorText;paint.alpha=255
                 paint.typeface=fonts.typefaceFor(cell.attributes and 3,cell.text)
                 val advance=advance(cell.text,cell.attributes and 3)
@@ -434,7 +461,7 @@ class TerminalView(context: Context) : View(context) {
     private fun settleScroll() {
         if(scrollMotion.remainder!=0f || scrollPixels!=0f) {scrollPixels=0f;scrollMotion.settle();invalidate()}
     }
-    override fun onDetachedFromWindow() {awake.detach();terminalImages.clear();clearRows();clearSelection();scrollFling.abortAnimation();touchVelocity?.recycle();touchVelocity=null;super.onDetachedFromWindow()}
+    override fun onDetachedFromWindow() {removeCallbacks(cursorTick);awake.detach();terminalImages.clear();clearRows();clearSelection();scrollFling.abortAnimation();touchVelocity?.recycle();touchVelocity=null;super.onDetachedFromWindow()}
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if(selection!=null && event.actionMasked==MotionEvent.ACTION_SCROLL) return true
         if(interactive && event.actionMasked==MotionEvent.ACTION_SCROLL) {
@@ -772,7 +799,7 @@ class TerminalView(context: Context) : View(context) {
             override fun performContextMenuAction(id: Int): Boolean = if(id==android.R.id.paste || id==android.R.id.pasteAsPlainText) controlled && interactive && imageTarget==imageInputTarget() && onPaste() else super.performContextMenuAction(id)
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
                 if(!active()) return false
-                awake.activity()
+                awake.activity();refreshCursorBlink()
                 if(text!=null) {super.commitText(text,newCursorPosition);pendingCommit=true;commitPending()}
                 return true
             }
@@ -781,14 +808,14 @@ class TerminalView(context: Context) : View(context) {
             @androidx.annotation.RequiresApi(34)
             override fun replaceText(start: Int,end: Int,text: CharSequence,newCursorPosition: Int,textAttribute: android.view.inputmethod.TextAttribute?): Boolean {
                 if(!active()) return false
-                awake.activity()
+                awake.activity();refreshCursorBlink()
                 val result=super.replaceText(start,end,text,newCursorPosition,textAttribute)
                 if(result) {pendingCommit=true;commitPending()}
                 return result
             }
             override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
                 if(!active()) return false
-                awake.activity()
+                awake.activity();refreshCursorBlink()
                 super.setComposingText(text ?: "",newCursorPosition);sync();return true
             }
             override fun finishComposingText(): Boolean {
@@ -797,7 +824,7 @@ class TerminalView(context: Context) : View(context) {
             }
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
                 if(!active()) return false
-                awake.activity()
+                awake.activity();refreshCursorBlink()
                 if(editor.isNotEmpty()) {super.deleteSurroundingText(beforeLength.coerceAtLeast(0),afterLength.coerceAtLeast(0));edited();return true}
                 repeat(beforeLength.coerceIn(0,128)) {onInput("\u007f")}
                 repeat(afterLength.coerceIn(0,128)) {onInput("\u001b[3~")};return true
@@ -838,7 +865,7 @@ class TerminalView(context: Context) : View(context) {
         return connection
     }
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        awake.activity()
+        awake.activity();refreshCursorBlink()
         if(event.isShiftPressed && keyCode in listOf(KeyEvent.KEYCODE_PAGE_UP,KeyEvent.KEYCODE_PAGE_DOWN)) {
             onScroll((if(keyCode==KeyEvent.KEYCODE_PAGE_UP) -1 else 1)*(screen?.rows ?: 24));return true
         }

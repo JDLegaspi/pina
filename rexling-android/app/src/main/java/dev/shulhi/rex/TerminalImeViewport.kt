@@ -13,9 +13,25 @@ internal data class TerminalKeyboardFocus(val top: Float,val cursorBottom: Float
 /** Keep the viewport anchored while the cursor is hidden during a repaint or scrollback. */
 internal class TerminalImePanState {
     private var lastFocus: TerminalKeyboardFocus?=null
+    private var viewport: Pair<Int,Int>?=null
+    private var offset=0
     fun position(focus: TerminalKeyboardFocus?,visibleHeight: Int,covered: Int): Int {
         if(focus!=null) lastFocus=focus
-        return terminalImePan(lastFocus,visibleHeight,covered)
+        val geometry=visibleHeight to covered
+        if(viewport!=geometry) {
+            viewport=geometry
+            offset=terminalImePan(lastFocus,visibleHeight,covered)
+        } else if(focus!=null && covered>0) {
+            // Once the keyboard settles, do not recenter on every cursor move.
+            // Status lines can change the prompt/content heuristic abruptly.
+            // Only reveal a cursor that actually leaves the visible viewport.
+            offset=when {
+                focus.top<offset->floor(focus.top).toInt()
+                focus.cursorBottom>offset+visibleHeight->ceil(focus.cursorBottom-visibleHeight).toInt()
+                else->offset
+            }.coerceIn(0,covered)
+        }
+        return offset
     }
 }
 

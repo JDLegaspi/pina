@@ -144,6 +144,7 @@ fn encode_frame(out: &mut Vec<u8>, frame: &Frame, previous: Option<&Frame>) {
         u64le(out, v);
     }
     out.push(frame.input_flags);
+    out.push(frame.cursor_style | ((frame.cursor_blinking as u8) << 2));
     let next = rows(frame);
     let old = previous.map(|old| rows(old));
     // RXT5 shift: content moved by `shift` rows (positive: up). The decoder
@@ -214,7 +215,7 @@ pub fn encode(state: &mut Shared, after: u64) -> Vec<u8> {
     }
     let base = &state.wire;
     let reset = after != base.revision || base.key != state.key;
-    let mut out = b"RXT5".to_vec();
+    let mut out = b"RXT6".to_vec();
     u64le(&mut out, state.revision);
     let previews: Vec<_> = std::mem::take(&mut state.pending_previews)
         .into_iter()
@@ -291,6 +292,8 @@ mod wire_tests {
             columns: 100,
             rows: 50,
             cursor: Some((0, 0)),
+            cursor_style: 1,
+            cursor_blinking: false,
             foreground: [255; 3],
             background: [0; 3],
             cells: (0..50)
@@ -318,6 +321,14 @@ mod wire_tests {
             above: Vec::new(),
             below: Vec::new(),
         }
+    }
+    #[test]
+    fn cursor_only_changes_encode_without_repeating_rows() {
+        let old=frame();let mut next=frame();next.cursor_style=0;next.cursor_blinking=true;
+        let mut bytes=Vec::new();encode_frame(&mut bytes,&next,Some(&old));
+        // Geometry 4, cursor 8, colors 8, scroll 24, input 1, cursor flags 1.
+        assert_eq!(bytes[46],4);
+        assert_eq!(u16::from_le_bytes(bytes[49..51].try_into().unwrap()),0);
     }
     #[test]
     fn packets_diff_against_delivered_frame_and_reset_on_unknown_base() {
@@ -384,7 +395,7 @@ mod wire_tests {
             activity: Arc::default(),
         };
         let full = encode(&mut state, 0);
-        assert_eq!(&full[..4], b"RXT5");
+        assert_eq!(&full[..4], b"RXT6");
         assert_eq!(
             full.windows(b"https://example.com/one".len())
                 .filter(|w| *w == b"https://example.com/one")
@@ -448,7 +459,7 @@ mod wire_tests {
     fn shift_and_rows(packet: &[u8]) -> (i16, u16) {
         // Header: magic 4, revision 8, metadata len 4 (+ bytes), flag 1, cols 2, rows 2, cursor 8, colors 8, scroll 24, input 1.
         let meta = u32::from_le_bytes(packet[12..16].try_into().unwrap()) as usize;
-        let at = 16 + meta + 1 + 2 + 2 + 8 + 8 + 24 + 1;
+        let at = 16 + meta + 1 + 2 + 2 + 8 + 8 + 24 + 1 + 1;
         (i16::from_le_bytes(packet[at..at + 2].try_into().unwrap()), u16::from_le_bytes(packet[at + 2..at + 4].try_into().unwrap()))
     }
     #[test]
@@ -456,9 +467,9 @@ mod wire_tests {
         let mut old=frame();old.above=vec![old.cells[..100].to_vec()];old.below=vec![old.cells[..100].to_vec()];
         let mut next=frame();next.above=old.above.clone();next.below=old.below.clone();next.cursor=Some((1,0));
         let mut delta=Vec::new();encode_frame(&mut delta,&next,Some(&old));
-        // Fixed frame header through changed-row count is 50 bytes. No cell
+        // Fixed frame header through changed-row count is 51 bytes. No cell
         // changed here, so the two overscan retain markers immediately follow it.
-        assert_eq!(&delta[50..52],&[255,255]);
+        assert_eq!(&delta[51..53],&[255,255]);
         let mut full=Vec::new();encode_frame(&mut full,&next,None);
         assert!(delta.len()*10<full.len());
     }

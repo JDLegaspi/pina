@@ -1044,3 +1044,34 @@ idle timeout. There is no extra app-specific grace period. Only the centered ter
 view can request the flag. Neighbor and retained handoff views are disabled.
 The View keepScreenOn flag is cleared on window focus/visibility loss and detach;
 no wake lock or background service is used. Manual locking remains available.
+
+### Program-requested cursor presentation
+
+The native renderer carries libghostty's cursor visual style and blinking flag
+through local JNI packets (RXT6 adds one cursor-flags byte after input flags).
+The Rex server wire protocol is unchanged. RXT1–RXT5 decode with the previous
+steady-block default. Bar, filled block, underline and hollow block are supported.
+DECSCUSR and DEC private mode 12 are interpreted by libghostty rather than
+reparsed by Android. Hidden cursors remain hidden. Cursor-only changes do not
+repeat unchanged rows.
+
+Android blinks at 500 ms per phase only when requested and the terminal is the
+interactive visible pane in a focused window. Cursor movement, mode changes and
+typing restart the visible phase. Inactive panes and background windows stop
+the timer; steady cursors schedule no timer. Blink redraws use the existing row
+cache and do not generate terminal frames or extend the screen-awake policy.
+
+### Stable keyboard viewport during editor navigation
+
+After keyboard geometry settles, the viewport keeps its existing offset while
+the cursor remains visible. Crossing an edge adjusts only enough to reveal the
+cursor. Status/footer distance no longer re-centers the whole terminal on each
+arrow step. Keyboard geometry changes still use the original prompt/context
+placement, and hidden cursor/scrollback frames retain the last anchor. This
+changes placement only; the terminal grid is not resized.
+
+The configured native cursor default is blinking, including after reconnect and
+DECSCUSR default/reset. Explicit DECSCUSR steady block/bar/underline requests
+retain priority, including snapshot restoration. DEC mode 12 still controls live
+blinking; libghostty snapshots do not distinguish a mode-12-only override from
+the configured default when the cursor shape still follows that default.

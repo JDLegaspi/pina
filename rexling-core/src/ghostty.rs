@@ -28,6 +28,8 @@ struct RawFrame {
     input_flags: u8,
     overscan_above: u16,
     overscan_below: u16,
+    cursor_style: u8,
+    cursor_blinking: u8,
 }
 const ROW_ABOVE: u16 = 0xFF00;
 const ROW_BELOW: u16 = 0xFE00;
@@ -101,6 +103,8 @@ pub struct Frame {
     pub columns: u16,
     pub rows: u16,
     pub cursor: Option<(u16, u16)>,
+    pub cursor_style: u8,
+    pub cursor_blinking: bool,
     pub foreground: [u8; 3],
     pub background: [u8; 3],
     pub cells: Vec<Cell>,
@@ -409,6 +413,8 @@ impl Terminal {
             columns: raw.columns,
             rows: raw.rows,
             cursor: (raw.cursor_visible != 0).then_some((raw.cursor_x, raw.cursor_y)),
+            cursor_style: raw.cursor_style,
+            cursor_blinking: raw.cursor_blinking != 0,
             foreground: raw.foreground,
             background: raw.background,
             scroll_total: raw.scroll_total,
@@ -553,6 +559,29 @@ impl Replica {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn program_cursor_shapes_and_blink_modes_reach_frames() {
+        let mut terminal=Terminal::new(20,5).unwrap();
+        for (sequence,style,blinking) in [(b"\x1b[1 q".as_slice(),1,true),(b"\x1b[2 q",1,false),(b"\x1b[3 q",2,true),(b"\x1b[4 q",2,false),(b"\x1b[5 q",0,true),(b"\x1b[6 q",0,false)] {
+            terminal.write(sequence).unwrap();let frame=terminal.frame().unwrap();
+            assert_eq!((frame.cursor_style,frame.cursor_blinking),(style,blinking));
+        }
+        terminal.write(b"\x1b[?12h").unwrap();assert!(terminal.frame().unwrap().cursor_blinking);
+        terminal.write(b"\x1b[?12l").unwrap();assert!(!terminal.frame().unwrap().cursor_blinking);
+        terminal.write(b"\x1b[?25l").unwrap();assert!(terminal.frame().unwrap().cursor.is_none());
+    }
+
+    #[test] fn default_cursor_blinks_but_explicit_steady_survives_snapshot_and_reset() {
+        let mut terminal=Terminal::new(20,5).unwrap();
+        assert!(terminal.frame().unwrap().cursor_blinking);
+        for request in [b"\x1b[2 q".as_slice(),b"\x1b[4 q",b"\x1b[6 q"] {
+            terminal.write(request).unwrap();assert!(!terminal.frame().unwrap().cursor_blinking);
+            let (mut restored,_)=Terminal::decode(&terminal.encode().unwrap()).unwrap();
+            assert!(!restored.frame().unwrap().cursor_blinking,"explicit steady request must survive reconnect: {:?}",request);
+            restored.write(b"\x1b[0 q").unwrap();assert!(restored.frame().unwrap().cursor_blinking);
+            terminal.write(b"\x1b[0 q").unwrap();assert!(terminal.frame().unwrap().cursor_blinking);
+        }
+        terminal.write(b"\x1b[2 q\x1bc").unwrap();assert!(terminal.frame().unwrap().cursor_blinking);
+    }
     #[test] fn osc52_delivers_decoded_text_only_from_live_writes() {
         let mut terminal=Terminal::new(30,6).unwrap();
         terminal.write(b"\x1b]52;c;b2xk\x07").unwrap();

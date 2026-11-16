@@ -138,6 +138,27 @@ class TerminalImeViewportTest {
             }
         }
     }
+    @Test fun editorArrowMovementNeverJumpsMoreThanOneRow() {
+        val dimensions=mutableListOf<Pair<Int,Int>>();lateinit var view: TerminalView
+        var focus by mutableStateOf<TerminalKeyboardFocus?>(null)
+        ui.setContent {Box(Modifier.width(320.dp).height(300.dp).clipToBounds()) {
+            AndroidView(factory={TerminalView(it).also {v->view=v;attach(v,dimensions);v.onKeyboardFocus={focus=it}}},
+                modifier=Modifier.fillMaxSize().terminalImeViewport(WindowInsets(bottom=400),WindowInsets(0,0,0,0)) {focus},update={focus=it.keyboardFocus})
+        }}
+        ui.waitForIdle()
+        val frame=view.screen!!;var previous=0;val sizes=dimensions.size
+        fun position(): Int {val at=IntArray(2);view.getLocationInWindow(at);return at[1]}
+        ui.runOnIdle {previous=position()}
+        for(row in (frame.rows-1 downTo 0)+(0 until frame.rows)) {
+            ui.runOnIdle {view.screen=frame.copy(cursorY=row)};ui.waitForIdle()
+            ui.runOnIdle {
+                val next=position()
+                assertTrue("One arrow step must not jump the viewport: $previous -> $next",kotlin.math.abs(next-previous)<=kotlin.math.ceil(view.height.toDouble()/frame.rows).toInt()+2)
+                previous=next
+                assertEquals("Arrow movement must not resize the terminal",sizes,dimensions.size)
+            }
+        }
+    }
     @Test fun realKeyboardDoesNotResizeTheTerminalAndTopPromptStaysPut() {
         val dimensions=mutableListOf<Pair<Int,Int>>();lateinit var view: TerminalView
         var visibleHeight=0;var viewportTop=0f;var cursorBottom by mutableStateOf<TerminalKeyboardFocus?>(null)

@@ -112,6 +112,20 @@ class TerminalUpdatesTest {
         }
     }
 
+    @Test fun cursorShapeAndBlinkDecodeOnFullAndCursorOnlyDelta() {
+        fun packet(revision: Long,flag: Int,flags: Int): ByteArray {
+            val old=rxt5(revision,flag,2,0,if(flag==3) mapOf(0 to "a",1 to "b") else emptyMap())
+            val at=16+1+4+8+8+24+1
+            return (old.take(at)+listOf(flags.toByte())+old.drop(at)).toByteArray().also {it[3]='6'.code.toByte()}
+        }
+        val decoder=TerminalUpdates()
+        val first=decoder.decode(packet(1,3,4)).screen!!
+        assertEquals(0,first.cursorStyle);assertTrue(first.cursorBlinking)
+        val steady=decoder.decode(packet(2,2,2)).screen!!
+        assertEquals(2,steady.cursorStyle);assertFalse(steady.cursorBlinking)
+        assertEquals(first.lines,steady.lines)
+        assertTrue(runCatching {TerminalUpdates().decode(packet(1,3,8))}.isFailure)
+    }
     /** RXT5 packet: [shift], changed rows (each one cell of [text]) and overscan rows. */
     private fun rxt5(revision: Long,flag: Int,rows: Int,shift: Int,changed: Map<Int,String>,above: List<String> = emptyList(),below: List<String> = emptyList(),reuseOverscan: Boolean=false): ByteArray {
         val out=ByteArrayOutputStream()

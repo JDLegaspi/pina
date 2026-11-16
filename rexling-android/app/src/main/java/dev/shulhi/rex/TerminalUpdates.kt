@@ -11,7 +11,7 @@ internal class TerminalUpdates {
         require(bytes.size in 17..134217728) {"Invalid terminal packet size"}
         val data=ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         val version=data.int
-        require(version==0x31545852 || version==0x32545852 || version==0x33545852 || version==0x34545852 || version==0x35545852) {"Unsupported terminal packet"}
+        require(version==0x31545852 || version==0x32545852 || version==0x33545852 || version==0x34545852 || version==0x35545852 || version==0x36545852) {"Unsupported terminal packet"}
         val nextRevision=data.long;require(nextRevision>revision)
         fun text(): String {val n=data.int;require(n>=0 && n<=data.remaining());val raw=ByteArray(n);data.get(raw);return raw.toString(Charsets.UTF_8)}
         val metadata=text()
@@ -25,6 +25,8 @@ internal class TerminalUpdates {
                 val x=data.int;val y=data.int;val fg=data.int;val bg=data.int
                 val scroll=TerminalScroll(data.long,data.long,data.long)
                 val inputFlags=if(version>=0x32545852) data.get().toInt() and 0xff else 0
+                val cursorFlags=if(version>=0x36545852) data.get().toInt() and 0xff else 1
+                require(cursorFlags in 0..7) {"Invalid cursor flags"}
                 if(flag==2) require(previous!=null && previous.columns==columns && previous.rows==rows) {"Missing terminal delta base"}
                 // RXT5: rows moved by `shift` (positive: up) before changed rows apply.
                 val shift=if(version>=0x35545852) data.short.toInt() else 0
@@ -104,7 +106,7 @@ internal class TerminalUpdates {
                         TerminalImagePlacement(image,layer,z,col,row,ox,oy,w,h,sx,sy,sw,sh)
                     }.sortedWith(compareBy({it.layer},{it.z}))
                 }
-                TerminalScreen(columns,rows,x.takeIf {it>=0},y.takeIf {it>=0},fg,bg,lines.flatten(),scroll,lines,inputFlags,placements,cw,ch,above,below)
+                TerminalScreen(columns,rows,x.takeIf {it>=0},y.takeIf {it>=0},fg,bg,lines.flatten(),scroll,lines,inputFlags,placements,cw,ch,above,below,cursorFlags and 3,cursorFlags and 4!=0)
             }
             else->error("Invalid terminal frame flag $flag")
         }
