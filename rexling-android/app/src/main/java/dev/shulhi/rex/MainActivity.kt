@@ -97,7 +97,9 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun RexApp(model: RexModel) {
     val client=model.activeClient
-    key(model.activeServerId) {RexWorkspace(model,client)}
+    CompositionLocalProvider(LocalKeepScreenAwake provides model.keepScreenAwake) {
+        key(model.activeServerId) {RexWorkspace(model,client)}
+    }
     if(model.notificationNotice.isNotBlank()) AlertDialog(onDismissRequest={model.notificationNotice=""},title={Text("Notification")},text={Text(model.notificationNotice)},confirmButton={TextButton(onClick={model.notificationNotice=""}) {Text("OK")}})
 }
 
@@ -115,6 +117,9 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
     val changingSession=navigation.session!=null && navigation.session!=state.selectedSession
     val windows=if(changingSession) emptyList() else client.orderedWindows(state)
     val window=windows.firstOrNull {w->w.blocks.any {it.id==displayedBlock}} ?: windows.firstOrNull {it.blocks.isNotEmpty()}
+    val activityBadges=remember(model.activitySources,model.activeServer,displayedSession,windows) {
+        ActivityBadgePolicy.route(model.activitySources,model.activeServer,displayedSession,windows)
+    }
     val ready=state.connected && !navigation.pending && !state.creating
     val keyTarget=client.keyTarget()
     val terminalHaze=remember {HazeState()}
@@ -309,7 +314,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
                     }
                     if(state.connected || state.phase=="preview" || client.hasScreen) {
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart=24.dp,topEnd=24.dp)).background(MaterialTheme.colorScheme.surface)) {
-                            TerminalTabs(windows,window?.id.orEmpty(),state.connected&&!state.creating&&!changingSession,client::selectWindow,panePrograms=client::tabPrograms,selectedPane=client::tabPaneIndex,paneTitle={w,pane->state.titles[w.blocks.getOrNull(pane)?.id].orEmpty()},paneWorking={w->w.blocks.any {it.id in state.workingBlocks}},onClose={closeTarget=closeTabTarget(it)},onMove=client::moveTab,reorderKey=displayedSession,animateWorking=!model.activityVisible,paneProgress={w->
+                            TerminalTabs(windows,window?.id.orEmpty(),state.connected&&!state.creating&&!changingSession,client::selectWindow,panePrograms=client::tabPrograms,selectedPane=client::tabPaneIndex,paneTitle={w,pane->state.titles[w.blocks.getOrNull(pane)?.id].orEmpty()},paneWorking={w->w.blocks.any {it.id in state.workingBlocks}},onClose={closeTarget=closeTabTarget(it)},onMove=client::moveTab,reorderKey=displayedSession,animateWorking=!model.activityVisible,tabAttention={w->activityBadges.tabs[w.id] ?: 0},paneProgress={w->
                                     state.terminalProgress[w.blocks.getOrNull(client.tabPaneIndex(w))?.id] ?: w.blocks.mapNotNull {state.terminalProgress[it.id]}.firstOrNull()
                                 },
                                 contentReady=client.hasScreen && !state.creating && !changingSession && windows.isNotEmpty() && windows.all {w->
@@ -317,7 +322,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
                                     block!=null && state.programs[block.id]?.pending==false
                                 },actions={
                                 TerminalActions(state.connected && state.selectedSession.isNotBlank(),model.connectedCount>0,
-                                    {model.showActivity(true)},{picker="tabs"},attentionCount=model.attentionCount)
+                                    {model.showActivity(true)},{picker="tabs"},attentionCount=activityBadges.elsewhere)
                             })
                             KeyboardBar(controlled,ready,client.controlModifier,client.altModifier,client.shiftModifier,keyboardVisible,
                                 client::toggleControl,client::toggleAlt,client::toggleShift,client::pressShift,client::releaseShift,{client.keyForTarget(it,keyTarget)},readable=state.connected,onControlShortcut=client::controlShortcut,inputKey=keyTarget,shortcutGesture=model.shortcutGesture,arrowJoystickEnabled=model.arrowJoystickEnabled,onPaste={pasteClipboard()},onPrompt=if(client.hasSemanticPrompts && !changingSession) client::scrollPrompt else null) {
@@ -344,7 +349,8 @@ if(picker=="sessions") SessionSwitcher(model.sessionTargets,currentSessionKey,mo
         onNetwork={preferencesOpen=false;networkSettings=true},onClose={preferencesOpen=false},shortcutGesture=model.shortcutGesture,onShortcutGesture=model::changeShortcutGesture,
         onNeovim={preferencesOpen=false;neovimSettings=true},arrowJoystickEnabled=model.arrowJoystickEnabled,onArrowJoystick=model::changeArrowJoystick,
         codexTitleAttention=model.experimentalCodexAttention,onCodexTitleAttention=model::changeCodexAttention,
-        minimizeFloatingPanes=model.minimizeFloatingPanes,onMinimizeFloatingPanes=model::changeMinimizeFloatingPanes)
+        minimizeFloatingPanes=model.minimizeFloatingPanes,onMinimizeFloatingPanes=model::changeMinimizeFloatingPanes,
+        keepScreenAwake=model.keepScreenAwake,onKeepScreenAwake=model::changeKeepScreenAwake)
     if(neovimSettings) NeovimShortcutsSheet(model.neovimShortcuts,model::saveNeovimShortcuts,onClose={neovimSettings=false},
         enabled=model.neovimShortcutsEnabled,onEnabled=model::enableNeovimShortcuts,
         layout=model.neovimShortcutLayout,onLayout=model::changeNeovimShortcutLayout,effect=model.neovimShortcutEffect,onEffect=model::changeNeovimShortcutEffect,

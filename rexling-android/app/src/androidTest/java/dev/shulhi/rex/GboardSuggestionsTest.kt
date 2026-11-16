@@ -26,7 +26,9 @@ import org.junit.Test
 /** Exercise the installed Gboard, rather than only calling InputConnection directly. */
 class GboardSuggestionsTest {
     @get:Rule val ui=createComposeRule()
-    @Test fun realKeyboardOffersAndCommitsAWordSuggestion() {
+    @Test fun realKeyboardOffersAndCommitsAWordSuggestion()=exerciseKeyboard(false)
+    @Test fun spaceAutocorrectionCommitsWithoutTouchingTheTerminal()=exerciseKeyboard(true)
+    private fun exerciseKeyboard(spaceCorrection: Boolean) {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val keyboard=Settings.Secure.getString(instrumentation.targetContext.contentResolver,Settings.Secure.DEFAULT_INPUT_METHOD).orEmpty()
         assumeTrue("Requires the user's installed Gboard",keyboard.startsWith("com.google.android.inputmethod.latin/"))
@@ -58,9 +60,23 @@ class GboardSuggestionsTest {
             ui.runOnIdle {previous=clipboard.primaryClip;clipboard.clearPrimaryClip();view.keyboard()}
             ui.waitUntil(timeoutMillis=10000) {root()!=null}
             SystemClock.sleep(1200) // Wait for the IME slide before reading key bounds.
-            for(letter in listOf("h","e","l")) {
+            for(letter in if(spaceCorrection) listOf("h","e","l","o") else listOf("h","e","l")) {
                 ui.waitUntil(timeoutMillis=5000) {find(root(),letter)!=null}
                 tap(find(root(),letter)!!);SystemClock.sleep(150)
+            }
+            if(spaceCorrection) {
+                fun space(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    if(node==null) return null
+                    val text="${node.text} ${node.contentDescription}"
+                    if(text.contains("space",ignoreCase=true)) {val bounds=Rect();node.getBoundsInScreen(bounds);if(!bounds.isEmpty) return node}
+                    for(index in 0 until node.childCount) space(node.getChild(index))?.let {return it}
+                    return null
+                }
+                ui.waitUntil(timeoutMillis=5000) {space(root())!=null}
+                tap(space(root())!!)
+                ui.waitUntil(timeoutMillis=2000) {sent.joinToString("").endsWith(" ")}
+                assertTrue("Space must commit the corrected word",sent.joinToString("").trim().isNotEmpty())
+                return
             }
             fun candidate(node: AccessibilityNodeInfo?): Pair<AccessibilityNodeInfo,String>? {
                 if(node==null) return null

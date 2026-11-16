@@ -47,6 +47,8 @@ import dev.chrisbanes.haze.hazeSource
     val palette=LocalTerminalPalette.current
     val backdrop=MaterialTheme.colorScheme.background
     val scope=rememberCoroutineScope()
+    val keepAwake=LocalKeepScreenAwake.current
+    val imeHandoff=remember {TerminalImeHandoff()}
     var visualId by remember(blocks.map {it.id}) {mutableStateOf(selectedBlock)}
     var drag by remember {mutableFloatStateOf(0f)}
     var dragging by remember {mutableStateOf(false)}
@@ -103,31 +105,39 @@ import dev.chrisbanes.haze.hazeSource
         // each real pane keeps one AndroidView and one stable key.
         val offsets=when(blocks.size) {0->emptyList();1->listOf(0);2->listOf(0,if(drag>0) -1 else 1);else->listOf(-1,0,1)}
         val showSwitch=(dragging || settling || toast) && blocks.size>1 && blocks.getOrNull(candidate)!=null
+        val pages=offsets.map {offset->blocks[Math.floorMod(index+offset,blocks.size)] to offset}
+        val retained=imeHandoff.retainFor(pages.map {it.first})
+        val mountedPages=pages+listOfNotNull(retained?.let {it.block to 4})
         Box(Modifier.fillMaxSize().then(if(showSwitch || captureBackdrop) Modifier.hazeSource(haze) else Modifier)) {
-        for(offset in offsets) {
-            val i=Math.floorMod(index+offset,blocks.size)
-            val block=blocks[i]
-            val center=offset==0
-            val frame=if(block.id==liveBlock && liveScreen!=null) liveScreen else frames[block.id]
+        for((block,offset) in mountedPages) {
+            val retiring=retained?.block?.id==block.id
+            val center=offset==0 && !retiring
+            val frame=if(retiring) retained!!.frame else
+                (if(block.id==liveBlock && liveScreen!=null) liveScreen else frames[block.id]) ?: imeHandoff.frame(block.id)
             val pageOffset=offset*stride
             key(block.id) {
+                DisposableEffect(block.id) {onDispose {imeHandoff.remove(block.id)}}
                 var keyboardFocus by remember {mutableStateOf<TerminalKeyboardFocus?>(null)}
                 Box(Modifier.width(cardWidth).fillMaxHeight().graphicsLayer {
                     val position=pageOffset+drag
                     translationX=kotlin.math.round(leftPx+position)
+                    alpha=if(retiring) 0f else 1f
                 }.clip(RoundedCornerShape(21.dp)).background(Color(palette.background))
                     .paneScrim(backdrop) {(abs(pageOffset+drag)/stride).coerceIn(0f,1f)*.48f}
-                    .then(if(center) Modifier else Modifier.clickable(role=Role.Button){latestSelect(block.id)})) {
+                    .then(if(center || retiring) Modifier else Modifier.clickable(role=Role.Button){latestSelect(block.id)})) {
                     Box(Modifier.fillMaxSize()) {
                         if(frame!=null) AndroidView(
                             factory={TerminalView(it)},modifier=Modifier.fillMaxSize().terminalImeViewport(imeInsets,navigationInsets) {keyboardFocus}.clipToBounds(),
                             update={view ->
+                                view.keepAwakeMode=if(center) keepAwake else KeepScreenAwake.SYSTEM
+                                imeHandoff.mount(block,view)
+                                view.onInputConnectionReady={if(center) imeHandoff.served(block.id,view)}
                                 view.onKeyboardFocus={keyboardFocus=it}
                                 keyboardFocus=view.keyboardFocus
                                 view.onDimensions=if(center && block.id==liveBlock) onDimensions else {_,_->}
                                 view.setTerminalPaddingDp(12,8,if(bottomControlsInset>0.dp || blocks.size>1) 28 else 6)
                                 view.palette=palette;view.textSp=fontSize
-                                if(block.id!=liveBlock || bindLiveView?.invoke(block.id,view)!=true) view.screen=frame
+                                if(retiring || block.id!=liveBlock || bindLiveView?.invoke(block.id,view)!=true) view.screen=frame
                                 view.interactive=center
                                 view.keyboardSuggestions=programs[block.id]?.kind!=ProgramKind.NEOVIM
                                 view.controlled=center && controlled && block.id==liveBlock

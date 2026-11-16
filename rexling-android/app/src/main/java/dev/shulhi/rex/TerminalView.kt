@@ -31,6 +31,14 @@ import kotlin.math.max
 internal enum class TerminalLinkAction { OPEN, COPY_ADDRESS, SHARE }
 
 class TerminalView(context: Context) : View(context) {
+    private val awake=TerminalAwake(this)
+    internal var keepAwakeMode: KeepScreenAwake
+        get()=awake.mode
+        set(value) {awake.mode=value}
+    override fun onAttachedToWindow() {super.onAttachedToWindow();awake.update()}
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {super.onWindowFocusChanged(hasWindowFocus);awake.update()}
+    override fun onWindowVisibilityChanged(visibility: Int) {super.onWindowVisibilityChanged(visibility);awake.update()}
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {if(event.actionMasked==MotionEvent.ACTION_DOWN) awake.activity();return super.dispatchTouchEvent(event)}
     var interactive = true
         set(value) {if(field!=value) {field=value;if(!value) clearSelection()}}
     private var selection: TerminalSelection?=null
@@ -63,6 +71,7 @@ class TerminalView(context: Context) : View(context) {
     internal var onImage: (Uri,()->Unit)->Boolean = {_,release->release();false}
     internal var onPaste: ()->Boolean = {false}
     var onInput: (String) -> Unit = {}
+    internal var onInputConnectionReady: ()->Unit = {}
     var onScroll: (Int) -> Unit = {}
     var onWheel: (Int,Int,Int,Int,Int) -> Unit = {lines,_,_,_,_->onScroll(lines)}
     var onActivate: () -> Unit = {}
@@ -98,6 +107,7 @@ class TerminalView(context: Context) : View(context) {
     internal fun presentFrame(value: TerminalScreen?,token: String?=null) {setScreen(value,true);frameTraceToken=token}
     private fun setScreen(value: TerminalScreen?,onDisplayFrame: Boolean) {
         if(currentScreen===value) return
+        if(value!=null && value!=currentScreen) awake.activity()
         val columns=currentScreen?.columns;val rows=currentScreen?.rows;currentScreen=value;frameTraceToken=null
         if(columns!=value?.columns || rows!=value?.rows) {scrollMotion.reset();configureRendering()}
         reportCursorViewport()
@@ -424,7 +434,7 @@ class TerminalView(context: Context) : View(context) {
     private fun settleScroll() {
         if(scrollMotion.remainder!=0f || scrollPixels!=0f) {scrollPixels=0f;scrollMotion.settle();invalidate()}
     }
-    override fun onDetachedFromWindow() {terminalImages.clear();clearRows();clearSelection();scrollFling.abortAnimation();touchVelocity?.recycle();touchVelocity=null;super.onDetachedFromWindow()}
+    override fun onDetachedFromWindow() {awake.detach();terminalImages.clear();clearRows();clearSelection();scrollFling.abortAnimation();touchVelocity?.recycle();touchVelocity=null;super.onDetachedFromWindow()}
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if(selection!=null && event.actionMasked==MotionEvent.ACTION_SCROLL) return true
         if(interactive && event.actionMasked==MotionEvent.ACTION_SCROLL) {
@@ -762,11 +772,23 @@ class TerminalView(context: Context) : View(context) {
             override fun performContextMenuAction(id: Int): Boolean = if(id==android.R.id.paste || id==android.R.id.pasteAsPlainText) controlled && interactive && imageTarget==imageInputTarget() && onPaste() else super.performContextMenuAction(id)
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
                 if(!active()) return false
+                awake.activity()
                 if(text!=null) {super.commitText(text,newCursorPosition);pendingCommit=true;commitPending()}
                 return true
             }
+            // Gboard's space-triggered autocorrection uses this API on Android 14+.
+            // BaseInputConnection edits the buffer directly, bypassing commitText.
+            @androidx.annotation.RequiresApi(34)
+            override fun replaceText(start: Int,end: Int,text: CharSequence,newCursorPosition: Int,textAttribute: android.view.inputmethod.TextAttribute?): Boolean {
+                if(!active()) return false
+                awake.activity()
+                val result=super.replaceText(start,end,text,newCursorPosition,textAttribute)
+                if(result) {pendingCommit=true;commitPending()}
+                return result
+            }
             override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
                 if(!active()) return false
+                awake.activity()
                 super.setComposingText(text ?: "",newCursorPosition);sync();return true
             }
             override fun finishComposingText(): Boolean {
@@ -775,6 +797,7 @@ class TerminalView(context: Context) : View(context) {
             }
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
                 if(!active()) return false
+                awake.activity()
                 if(editor.isNotEmpty()) {super.deleteSurroundingText(beforeLength.coerceAtLeast(0),afterLength.coerceAtLeast(0));edited();return true}
                 repeat(beforeLength.coerceIn(0,128)) {onInput("\u007f")}
                 repeat(afterLength.coerceIn(0,128)) {onInput("\u001b[3~")};return true
@@ -810,9 +833,12 @@ class TerminalView(context: Context) : View(context) {
         }
         flushImeEditor={connection.flush()}
         if(pending.isNotEmpty()) connection.setComposingRegion(0,editor.length)
+        // Run after IMM has accepted the connection, before retiring its predecessor.
+        post {if(imeEditable===editor && controlled && hasFocus()) onInputConnectionReady()}
         return connection
     }
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        awake.activity()
         if(event.isShiftPressed && keyCode in listOf(KeyEvent.KEYCODE_PAGE_UP,KeyEvent.KEYCODE_PAGE_DOWN)) {
             onScroll((if(keyCode==KeyEvent.KEYCODE_PAGE_UP) -1 else 1)*(screen?.rows ?: 24));return true
         }

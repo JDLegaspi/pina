@@ -116,6 +116,9 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
     internal val themes by lazy {ThemeCatalog.load(application)}
     private var darkTheme by mutableStateOf(preferences.getString("dark_theme","rexlink-default-dark").orEmpty())
     private var lightTheme by mutableStateOf(preferences.getString("light_theme","rexlink-default-light").orEmpty())
+    internal var keepScreenAwake by mutableStateOf(runCatching {KeepScreenAwake.valueOf(preferences.getString("keep_screen_awake","SYSTEM")!!)}.getOrDefault(KeepScreenAwake.SYSTEM))
+        private set
+    internal fun changeKeepScreenAwake(value: KeepScreenAwake) {keepScreenAwake=value;preferences.edit {putString("keep_screen_awake",value.name)}}
     var fontSize by mutableIntStateOf(preferences.getInt("font_size",10).coerceIn(8,20))
         private set
     internal fun theme(dark: Boolean): AppTheme {

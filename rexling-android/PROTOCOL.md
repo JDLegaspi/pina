@@ -999,3 +999,48 @@ before hit testing, and the stop tap cannot activate a link or terminal action.
 The implementation adapts michaelcosj/rexling's smooth-scroll work, with offset-
 based row reuse, unchanged-overscan reuse, bounded fractional movement, explicit
 image fallback and stop-tap handling. Source attribution is in THIRD_PARTY_NOTICES.
+
+### Activity badge destinations
+
+Unread badges are routed from the existing version-aware Activity seen state.
+Notifiable records on the active saved server and displayed session badge the tab
+that currently contains their pane. Current block membership takes precedence over
+possibly stale activity window metadata. Hidden panes in the selected tab can keep
+that tab badged; merely selecting a tab does not acknowledge its other panes.
+Records from other sessions/servers or unavailable panes remain on the Activity
+eye. Working, progress-only, seen and disconnected-source records do not badge.
+This is presentation only: foreground acknowledgement, server mark-seen sync and
+Android notification delivery retain their existing rules. Tab dots sit on the
+program icon stack's upper-right corner without changing tab allocation or spacing.
+
+### Tab-switch keyboard handoff
+
+When a tab switch removes the focused terminal while the keyboard is visible,
+the carousel retains at most one outgoing editor and frame offscreen until
+Android serves the incoming editor's input connection. The outgoing view loses
+input ownership immediately; it cannot accept input or claim dimensions. This
+retains no additional remote stream. Once the incoming editor is served, the
+outgoing view is removed. Cached frames and rapid tab switches use the same
+bounded handoff. This prevents Gboard briefly falling back to its number-row
+layout while the incoming tab is loading.
+
+### Android replacement edits
+
+Android 14+ `InputConnection.replaceText` is handled as a committed edit using
+the same cursor-aware diff and batch boundary as `commitText`. Gboard uses this
+API for space-triggered autocorrection; the base implementation edits the local
+Editable without calling `commitText`. Replacement edits therefore explicitly
+mark a pending commit and flush it at the outer batch boundary, without needing
+a terminal tap. Stale input connections reject replacements before modifying
+the buffer or sending any input.
+
+### Keep screen awake
+
+Preferences → Display offers System default (initial setting), While a terminal
+is visible, and While the visible terminal is active. The active mode refreshes the
+screen-awake flag for typing, touching the terminal, or changed terminal
+output, then releases it on the next display frame so Android owns the normal
+idle timeout. There is no extra app-specific grace period. Only the centered terminal
+view can request the flag. Neighbor and retained handoff views are disabled.
+The View keepScreenOn flag is cleared on window focus/visibility loss and detach;
+no wake lock or background service is used. Manual locking remains available.

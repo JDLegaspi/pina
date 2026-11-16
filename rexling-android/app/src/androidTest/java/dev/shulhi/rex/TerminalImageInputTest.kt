@@ -45,6 +45,22 @@ class TerminalImageInputTest {
             assertEquals(listOf("hello ","This is dictated text.","pending"),sent)
         }
     }
+    @Test fun replacementApiCommitsCorrectionsAndRejectsStaleTargets() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT>=34)
+        instrumentation.runOnMainSync {
+            val sent=mutableListOf<String>();var target="a"
+            val view=TerminalView(instrumentation.targetContext).apply {controlled=true;imageInputTarget={target};onInput={sent+=it}}
+            val input=view.onCreateInputConnection(EditorInfo())!!
+            input.commitText("helo",1)
+            input.replaceText(0,4,"hello ",1,null)
+            assertEquals(listOf("helo","\u007flo "),sent)
+            input.beginBatchEdit();input.replaceText(0,6,"help ",1,null)
+            assertEquals(2,sent.size)
+            input.endBatchEdit();assertEquals("\u007f\u007f\u007fp ",sent.last())
+            input.finishComposingText();assertEquals(3,sent.size)
+            target="b";assertFalse(input.replaceText(0,5,"wrong",1,null));assertEquals(3,sent.size)
+        }
+    }
     @Test fun editBatchesReportTheirRemainingNestingToAndroid() {
         instrumentation.runOnMainSync {
             val view=TerminalView(instrumentation.targetContext).apply {controlled=true}

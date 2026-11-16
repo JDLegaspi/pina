@@ -359,7 +359,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun TerminalTabs(windows: List<WindowItem>,selectedId: String,enabled: Boolean,
-    onSelect: (String)->Unit,panePrograms: (WindowItem)->List<ProgramIdentity>,selectedPane: (WindowItem)->Int,paneTitle: (WindowItem,Int)->String={_,_->""},paneWorking: (WindowItem)->Boolean={false},onClose: (WindowItem)->Unit={},onMove: (String,String?)->Boolean={_,_->false},reorderKey: String="",animateWorking: Boolean=true,contentReady: Boolean=true,paneProgress: (WindowItem)->TerminalProgress?={null},actions: @Composable ()->Unit) {
+    onSelect: (String)->Unit,panePrograms: (WindowItem)->List<ProgramIdentity>,selectedPane: (WindowItem)->Int,paneTitle: (WindowItem,Int)->String={_,_->""},paneWorking: (WindowItem)->Boolean={false},onClose: (WindowItem)->Unit={},onMove: (String,String?)->Boolean={_,_->false},reorderKey: String="",animateWorking: Boolean=true,contentReady: Boolean=true,paneProgress: (WindowItem)->TerminalProgress?={null},tabAttention: (WindowItem)->Int={0},actions: @Composable ()->Unit) {
     var revealed by remember(reorderKey) {mutableStateOf(false)}
     LaunchedEffect(reorderKey,contentReady) {if(contentReady) revealed=true}
     if(!contentReady && !revealed) {
@@ -456,6 +456,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
                     val allocation=widths[windowIndex]
                     val width=allocation.width.dp
                     val showTitle=allocation.showTitle
+                    val unread=tabAttention(w)
                     val progress=paneProgress(w)
                     val indicatorColor=terminalProgressColor(progress)
                     val busy=paneWorking(w) || progress?.busy==true
@@ -484,6 +485,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
                         .semantics(mergeDescendants=true) {contentDescription="Tab $title, ${program.label}"+(progress?.let {", ${it.description}"} ?: if(busy) ", working" else "")}
                         .semantics {
                             selected=active
+                            if(unread>0) stateDescription="$unread new activity items"
                             if(enabled) {
                                 onLongClick("Tab options") {menuId=w.id;true}
                                 customActions=buildList {
@@ -495,7 +497,20 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
                         .clickable(enabled=enabled,role=Role.Tab,onClick={onSelect(w.id)}),horizontalAlignment=Alignment.CenterHorizontally) {
                         Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal=6.dp),
                             verticalAlignment=Alignment.CenterVertically,horizontalArrangement=if(showTitle) Arrangement.spacedBy(2.dp) else Arrangement.Center) {
-                            ProgramStack(programs,pane,fixedSlot=true)
+                            Box(Modifier.semantics {testTag="Tab program icon ${w.id}"}) {
+                                ProgramStack(programs,pane,fixedSlot=true)
+                                if(unread>0) {
+                                    // Match the actual painted icon stack, including the
+                                    // centering used when its fixed slot has fewer panes.
+                                    val layers=programs.size.coerceIn(1,3)
+                                    val painted=if(layers==1) 22f else 21f+4f*(layers-1)
+                                    val right=(36f+painted)/2f
+                                    Box(Modifier.offset(x=(right-4).dp,y=(-.5).dp).size(8.dp)
+                                        .border(1.5.dp,MaterialTheme.colorScheme.background,androidx.compose.foundation.shape.CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary,androidx.compose.foundation.shape.CircleShape)
+                                        .semantics {testTag="Tab unread dot ${w.id}"})
+                                }
+                            }
                             if(showTitle) Text(title,Modifier.weight(1f),fontSize=12.sp,lineHeight=18.sp,
                                 style=androidx.compose.ui.text.TextStyle(platformStyle=androidx.compose.ui.text.PlatformTextStyle(includeFontPadding=false)),fontWeight=if(active) FontWeight.Bold else FontWeight.Normal,
                                 color=if(active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,

@@ -53,7 +53,7 @@ internal object SettingsType {
     HorizontalDivider(Modifier.padding(start=64.dp,end=16.dp),color=MaterialTheme.colorScheme.outlineVariant.copy(alpha=.5f))
 }
 
-internal enum class SettingsGlyph { APPEARANCE,FONT,ALERTS,UPLOAD,INFO,SERVER,COMMAND }
+internal enum class SettingsGlyph { APPEARANCE,FONT,ALERTS,UPLOAD,INFO,SERVER,COMMAND,NETWORK }
 
 @Composable internal fun SettingsRow(title: String,subtitle: String,glyph: SettingsGlyph,onClick: ()->Unit,badge: String?=null) {
     val chevronColor=MaterialTheme.colorScheme.onSurfaceVariant
@@ -102,6 +102,13 @@ internal enum class SettingsGlyph { APPEARANCE,FONT,ALERTS,UPLOAD,INFO,SERVER,CO
                         for(y in listOf(4f,14f)) {
                             drawRoundRect(color,Offset(3f*u,y*u),Size(18f*u,6f*u),CornerRadius(1.5f*u),style=stroke)
                             drawCircle(color,.8f*u,Offset(7f*u,(y+3)*u))
+                        }
+                    }
+                    SettingsGlyph.NETWORK->{
+                        line(12f,8f,12f,12f);line(5f,12f,19f,12f)
+                        line(5f,12f,5f,16f);line(19f,12f,19f,16f)
+                        for((x,y) in listOf(12f to 5f,5f to 19f,19f to 19f)) {
+                            drawCircle(color,3f*u,Offset(x*u,y*u),style=stroke)
                         }
                     }
                     SettingsGlyph.FONT->Unit

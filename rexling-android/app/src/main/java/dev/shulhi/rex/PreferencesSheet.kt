@@ -1,5 +1,6 @@
 package dev.shulhi.rex
 
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,7 +16,8 @@ import androidx.compose.ui.unit.dp
 @Composable internal fun PreferencesSheet(onAppearance: ()->Unit,onFont: ()->Unit,onAlerts: ()->Unit,onAbout: ()->Unit,onClose: ()->Unit,
     shortcutGesture: ControlShortcutGesture=ControlShortcutGesture.HOLD,onShortcutGesture: (ControlShortcutGesture)->Unit={},onNeovim: ()->Unit={},
     arrowJoystickEnabled: Boolean=true,onArrowJoystick: (Boolean)->Unit={},codexTitleAttention: Boolean=false,onCodexTitleAttention: (Boolean)->Unit={},
-    minimizeFloatingPanes: Boolean=false,onMinimizeFloatingPanes: (Boolean)->Unit={},onNetwork: ()->Unit={}) {
+    minimizeFloatingPanes: Boolean=false,onMinimizeFloatingPanes: (Boolean)->Unit={},onNetwork: ()->Unit={},
+    keepScreenAwake: KeepScreenAwake=KeepScreenAwake.SYSTEM,onKeepScreenAwake: (KeepScreenAwake)->Unit={}) {
     ModalBottomSheet(onDismissRequest=onClose,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().heightIn(max=680.dp).verticalScroll(rememberScrollState()).padding(horizontal=20.dp).padding(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
             SettingsHeader("Preferences","Close preferences",onClose)
@@ -23,6 +25,20 @@ import androidx.compose.ui.unit.dp
                 SettingsRow("Appearance","Themes and light or dark mode",SettingsGlyph.APPEARANCE,onAppearance)
                 SettingsDivider()
                 SettingsRow("Font size","Terminal text size",SettingsGlyph.FONT,onFont)
+                SettingsDivider()
+                Column(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=14.dp)) {
+                    Text("Keep screen awake",style=SettingsType.row)
+                    Text("Only while Rexling is in the foreground. You can still lock the phone.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    KeepScreenAwake.entries.forEach {mode->
+                        Row(Modifier.fillMaxWidth().selectable(mode==keepScreenAwake,role=androidx.compose.ui.semantics.Role.RadioButton,onClick={onKeepScreenAwake(mode)}).padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
+                            RadioButton(selected=mode==keepScreenAwake,onClick=null)
+                            Column(Modifier.padding(start=8.dp)) {
+                                Text(mode.label,style=SettingsType.row)
+                                Text(mode.detail,style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
             }
             SettingsSection("Panes") {
                 Row(Modifier.fillMaxWidth().toggleable(minimizeFloatingPanes,role=androidx.compose.ui.semantics.Role.Switch,onValueChange=onMinimizeFloatingPanes)
@@ -58,7 +74,7 @@ import androidx.compose.ui.unit.dp
                 SettingsRow("Neovim shortcuts","Customize the floating key menu",SettingsGlyph.COMMAND,onNeovim)
             }
             SettingsSection("Connections") {
-                SettingsRow("Network","Built-in Tailscale and control server",SettingsGlyph.INFO,onNetwork)
+                SettingsRow("Network","Built-in Tailscale and control server",SettingsGlyph.NETWORK,onNetwork)
                 SettingsDivider()
                 SettingsRow("Background alerts","Task completions and attention alerts",SettingsGlyph.ALERTS,onAlerts)
             }
