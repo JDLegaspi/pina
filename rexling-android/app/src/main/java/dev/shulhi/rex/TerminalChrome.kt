@@ -73,7 +73,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, ADD, KEYBOARD, HIDE_KEYBOARD, LEFT, RIGHT, UP, DOWN, TAB, CLOSE, ESCAPE, CONTROL, ALT, SHIFT, POINTER, EYE, BACKSPACE, ARROWS, ENTER, SETTINGS, PASTE, IMAGE, SERVER, REFRESH, SUN, MOON, EDIT, UNPLUG, DELETE, FLOAT }
+internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, ADD, KEYBOARD, HIDE_KEYBOARD, LEFT, RIGHT, UP, DOWN, TAB, CLOSE, ESCAPE, CONTROL, ALT, SHIFT, POINTER, EYE, BACKSPACE, ARROWS, ENTER, SETTINGS, PASTE, IMAGE, SERVER, REFRESH, SUN, MOON, EDIT, UNPLUG, DELETE, FLOAT, CHECK }
 
 @Composable internal fun ChromeSymbol(icon: ChromeIcon, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
     Canvas(modifier.size(19.dp)) {
@@ -132,6 +132,7 @@ internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, A
                 drawPath(moon,color,style=Stroke(width))
             }
             ChromeIcon.MORE -> { for(y in listOf(5f,12f,19f)) drawCircle(color,1.4f*u,Offset(12f*u,y*u)) }
+            ChromeIcon.CHECK -> {line(5f,12f,10f,17f);line(10f,17f,20f,6f)}
             ChromeIcon.CLOSE -> {line(6f,6f,18f,18f);line(6f,18f,18f,6f)}
             ChromeIcon.ADD -> { line(5f,12f,19f,12f); line(12f,5f,12f,19f) }
             ChromeIcon.LEFT -> arrow(-1f,0f)

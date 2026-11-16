@@ -35,12 +35,44 @@ type sshCredential struct {
 	Key string `json:"key"`
 }
 type configuration struct {
+	Suspended  bool                     `json:"built_in_suspended"`
+	Enabled    bool                     `json:"built_in_enabled"`
+	Routes     map[string]string        `json:"routes"`
 	BuiltIn    bool                     `json:"built_in"`
 	ControlURL string                   `json:"control_url"`
 	Directory  string                   `json:"directory"`
 	SSH        map[string]sshCredential `json:"ssh"`
 	Trusted    map[string]string        `json:"trusted"`
 }
+
+func (c configuration) tailscaleEnabled() bool {
+	if c.Suspended {
+		return false
+	}
+	if c.BuiltIn || c.Enabled {
+		return true
+	}
+	for _, route := range c.Routes {
+		if route == "builtin" {
+			return true
+		}
+	}
+	return false
+}
+func (c configuration) builtInFor(endpoint string) bool {
+	if u, err := url.Parse(endpoint); err == nil && u.Path == "/" {
+		u.Path = ""
+		endpoint = u.String()
+	}
+	switch c.Routes[endpoint] {
+	case "builtin":
+		return true
+	case "phone":
+		return false
+	}
+	return c.BuiltIn
+}
+
 type interfaceInfo struct {
 	Name      string   `json:"name"`
 	Index     int      `json:"index"`
@@ -127,7 +159,7 @@ func configure(next configuration) error {
 	for _, client := range clients {
 		client.Close()
 	}
-	if previous.BuiltIn != next.BuiltIn || previous.ControlURL != next.ControlURL || previous.Directory != next.Directory {
+	if previous.tailscaleEnabled() != next.tailscaleEnabled() || previous.ControlURL != next.ControlURL || previous.Directory != next.Directory {
 		tail.Lock()
 		old := tail.server
 		tail.server = nil
@@ -136,7 +168,7 @@ func configure(next configuration) error {
 			old.Close()
 		}
 	}
-	if next.BuiltIn {
+	if next.tailscaleEnabled() {
 		go func() { _, _ = tailServer() }()
 	}
 	return nil
@@ -150,7 +182,7 @@ func tailServer() (*tsnet.Server, error) {
 	state.Lock()
 	config := state.config
 	state.Unlock()
-	if !config.BuiltIn {
+	if !config.tailscaleEnabled() {
 		return nil, errors.New("built-in Tailscale is off")
 	}
 	control := config.ControlURL
@@ -167,9 +199,9 @@ func tailServer() (*tsnet.Server, error) {
 	tail.server = server
 	return server, nil
 }
-func networkDial(ctx context.Context, address string) (net.Conn, error) {
+func networkDial(ctx context.Context, endpoint string, address string) (net.Conn, error) {
 	state.Lock()
-	builtIn := state.config.BuiltIn
+	builtIn := state.config.builtInFor(endpoint)
 	state.Unlock()
 	if builtIn {
 		server, err := tailServer()
@@ -179,6 +211,43 @@ func networkDial(ctx context.Context, address string) (net.Conn, error) {
 		return server.Dial(ctx, "tcp", address)
 	}
 	return (&net.Dialer{KeepAlive: 20 * time.Second}).DialContext(ctx, "tcp", address)
+}
+
+// Cancelling unfinished enrollment must not reset SSH clients or other routes.
+func cancelLogin() error {
+	tail.Lock()
+	defer tail.Unlock()
+	server := tail.server
+	if server != nil {
+		local, err := server.LocalClient()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		current, err := local.Status(ctx)
+		if err != nil {
+			cancel()
+			return err
+		}
+		if current.BackendState == "Running" {
+			cancel()
+			return errors.New("Tailscale is already connected; sign-in was not cancelled")
+		}
+		// The local logout clears the pending interactive login before shutdown.
+		err = local.Logout(ctx)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	state.Lock()
+	state.config.Suspended = true
+	state.Unlock()
+	tail.server = nil
+	if server != nil {
+		server.Close()
+	}
+	return nil
 }
 func hostIdentity(u *url.URL) string {
 	port := u.Port()
@@ -231,7 +300,7 @@ func sshClient(ctx context.Context, u *url.URL) (*ssh.Client, error) {
 		}
 		config.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
 	}
-	connection, err := networkDial(ctx, identity)
+	connection, err := networkDial(ctx, endpoint, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -325,11 +394,11 @@ func dial(ctx context.Context, endpoint string) (net.Conn, error) {
 			port = "80"
 		}
 	}
-	return networkDial(ctx, net.JoinHostPort(u.Hostname(), port))
+	return networkDial(ctx, endpoint, net.JoinHostPort(u.Hostname(), port))
 }
 func status() map[string]any {
 	state.Lock()
-	builtIn := state.config.BuiltIn
+	builtIn := state.config.tailscaleEnabled()
 	prompts := make([]hostPrompt, 0, len(state.prompts))
 	for _, p := range state.prompts {
 		prompts = append(prompts, p)
@@ -396,6 +465,8 @@ func rexnet_command(raw *C.char) *C.char {
 					cancel()
 				}
 			}
+		case "cancel_login":
+			err = cancelLogin()
 		case "import_key":
 			var key any
 			if request.Passphrase == "" {

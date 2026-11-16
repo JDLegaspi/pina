@@ -17,7 +17,11 @@ pub fn command(request: &str) -> Result<String> {
     unsafe {rexnet_free(pointer.cast())};
     let value: serde_json::Value=serde_json::from_str(&response)?;
     if parsed["type"]=="configure" && value["error"].is_null() {
-        BUILT_IN.store(parsed["config"]["built_in"].as_bool().unwrap_or(false),Ordering::Release);
+        let config=&parsed["config"];
+        let use_bridge=config["built_in"].as_bool().unwrap_or(false)
+            || config["built_in_enabled"].as_bool().unwrap_or(false)
+            || config["routes"].as_object().is_some_and(|routes|routes.values().any(|route|route.as_str()==Some("builtin")));
+        BUILT_IN.store(use_bridge,Ordering::Release);
     }
     Ok(response)
 }

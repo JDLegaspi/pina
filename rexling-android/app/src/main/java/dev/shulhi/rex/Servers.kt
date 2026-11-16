@@ -12,6 +12,11 @@ enum class ServerIcon(val key: String,val label: String) {
     companion object {fun decode(value: String?)=entries.firstOrNull {it.key==value} ?: GLOBE}
 }
 
+internal enum class ServerNetworkRoute(val key: String,val label: String) {
+    PHONE("phone","Phone network / VPN"),BUILTIN("builtin","Built-in Tailscale");
+    companion object {fun decode(value: String?)=entries.firstOrNull {it.key==value} ?: PHONE}
+}
+
 data class ServerProfile(val id: String,val label: String,val endpoint: String,val icon: ServerIcon=ServerIcon.GLOBE) {
     companion object {
         val Empty=ServerProfile("__empty__","No server","")
@@ -53,4 +58,13 @@ object SavedServers {
 data class ServerStatus(val phase: String="disconnected",val error: String="") {
     val connected: Boolean get()=phase=="connected"
     val maintained: Boolean get()=phase in listOf("connected","connecting","reconnecting","paused")
+}
+
+/** Materialize legacy app-wide routing once; all subsequent choices belong to endpoints. */
+internal fun migratedServerRoutes(routes: JSONObject,endpoints: List<String>,legacyBuiltIn: Boolean): JSONObject {
+    val result=JSONObject(routes.toString())
+    endpoints.forEach {endpoint->
+        if(result.optString(endpoint) !in listOf("phone","builtin")) result.put(endpoint,if(legacyBuiltIn) "builtin" else "phone")
+    }
+    return result
 }

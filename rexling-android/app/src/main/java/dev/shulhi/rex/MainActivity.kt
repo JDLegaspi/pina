@@ -132,6 +132,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
     var endpoint by rememberSaveable {mutableStateOf(client.savedEndpoint)}
     var showServer by rememberSaveable {mutableStateOf(true)}
     var servers by remember {mutableStateOf(false)}
+    var addServer by remember {mutableStateOf(false)}
     var forwards by remember {mutableStateOf(false)}
     var connectionError by remember {mutableStateOf<String?>(null)}
     var picker by remember {mutableStateOf("")}
@@ -191,7 +192,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
     val floatingActive=floating.any {it.id==chosen}
     var hiddenFloating by rememberSaveable(displayedSession,window?.id) {mutableStateOf("")}
     val controlled=state.controlled && ready && client.hasScreen && (!floatingActive || hiddenFloating!=chosen)
-    SideEffect {model.setPaneObscured((floatingActive && hiddenFloating==chosen) || model.activityVisible || picker.isNotEmpty() || preferencesOpen || networkSettings || servers || forwards || newSession || appearance || about || neovimSettings || alerts || fontPicker || closeTarget!=null)}
+    SideEffect {model.setPaneObscured((floatingActive && hiddenFloating==chosen) || model.activityVisible || picker.isNotEmpty() || preferencesOpen || networkSettings || servers || addServer || forwards || newSession || appearance || about || neovimSettings || alerts || fontPicker || closeTarget!=null)}
     fun openPane(id: String) {hiddenFloating="";client.selectBlock(id)}
     fun minimizeFloating() {
         hiddenFloating=chosen
@@ -235,7 +236,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
             SessionHeader(sessionStrip,currentSessionKey,state.connected,model.sessionTargets.isNotEmpty(),
                 blocks.map {state.programs[it.id] ?: ProgramIdentity.Loading},blocks.indexOfFirst {it.id==chosen}.coerceAtLeast(0),state.directories[displayedBlock].orEmpty(),{picker="sessions"},model::selectSessionTarget,model::jumpLastSession,
                 serverIcons=model.sessionTargets.associate {it.key to it.server.icon}+(currentSessionKey to model.activeServer.icon),
-                working=chosen in state.workingBlocks,title=(state.programs[chosen] ?: ProgramIdentity.Loading).paneTitle(blocks.firstOrNull {it.id==chosen}?.label.orEmpty(),state.titles[chosen].orEmpty()),menu={
+                working=chosen in state.workingBlocks,title=if(model.servers.isEmpty()) stringResource(R.string.app_name) else (state.programs[chosen] ?: ProgramIdentity.Loading).paneTitle(blocks.firstOrNull {it.id==chosen}?.label.orEmpty(),state.titles[chosen].orEmpty()),menu={
                     Box {
                         ChromeButton(ChromeIcon.MORE,"Terminal menu"){menu=true}
                         DropdownMenu(menu,{menu=false},modifier=Modifier.drawerFrost(workspaceHaze,RoundedCornerShape(16.dp),workspaceBackdrop),shape=RoundedCornerShape(16.dp),containerColor=Color.Transparent,tonalElevation=0.dp) {
@@ -265,7 +266,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
                 Column(Modifier.fillMaxSize()) {
                     if(showServer || (state.phase=="disconnected"&&!client.hasScreen)) {
                         Surface(Modifier.padding(12.dp),shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.surface) {
-                            Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            if(model.servers.isEmpty()) EmptyServerContent(onAdd={addServer=true}) else Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                                 Text(stringResource(R.string.app_name),fontWeight=FontWeight.Bold,fontSize=20.sp)
                                 Text(stringResource(R.string.app_subtitle),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("Connect over Tailscale",fontWeight=FontWeight.SemiBold)
@@ -282,7 +283,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
                             }
                         }
                     }
-                    if(blocks.isEmpty()) ConnectionNotice(state.phase,model.networkAvailable,client::retryNow)
+                    if(blocks.isEmpty() && model.servers.isNotEmpty()) ConnectionNotice(state.phase,model.networkAvailable,client::retryNow)
                     if(blocks.isEmpty() && state.connected && !state.creating && state.sessions.isEmpty()) {
                         EmptySessionContent(model.activeServer.label,ready,{newSession=true},Modifier.weight(1f).fillMaxWidth())
                     }
@@ -344,7 +345,7 @@ if(picker=="sessions") SessionSwitcher(model.sessionTargets,currentSessionKey,mo
                     onSelect={picker="";model.selectSessionTarget(it)},onClose={picker=""},onNew={picker="";newSession=true},hazeState=workspaceHaze)
     if(model.activityVisible) ActivitySheet(model.activitySources,model::refreshActivity,model::openActivity,onClose={model.showActivity(false)},onSeen=model::markActivitySeen,onMarkAll=model::markAllActivitySeen,hazeState=workspaceHaze)
     NetworkPrompts()
-    if(networkSettings) NetworkSheet {networkSettings=false}
+    if(networkSettings) NetworkSheet(model.activeServer,state.connected) {networkSettings=false}
     if(preferencesOpen) PreferencesSheet({preferencesOpen=false;appearance=true},{preferencesOpen=false;fontPicker=true},{preferencesOpen=false;alerts=true},{preferencesOpen=false;about=true},
         onNetwork={preferencesOpen=false;networkSettings=true},onClose={preferencesOpen=false},shortcutGesture=model.shortcutGesture,onShortcutGesture=model::changeShortcutGesture,
         onNeovim={preferencesOpen=false;neovimSettings=true},arrowJoystickEnabled=model.arrowJoystickEnabled,onArrowJoystick=model::changeArrowJoystick,
@@ -362,6 +363,7 @@ if(picker=="sessions") SessionSwitcher(model.sessionTargets,currentSessionKey,mo
         withUploadNetwork({PortForwards.start(context,model.activeServer,state.selectedSession,host,port,local)})
     }
     if(servers) ServersSheet(model){servers=false}
+    if(addServer) ServerEditor(null,onClose={addServer=false},onSave={label,url,icon->model.saveServer(null,label,url,icon)})
     if(picker=="tabs" || picker=="panes") TabPaneSwitcher(windows,window?.id.orEmpty(),chosen,
         state.programs,state.titles,state.directories,client::tabPaneIndex,ready,
         canCreateTab=ready && state.selectedSession.isNotBlank(),canCreatePane=ready && state.selectedSession.isNotBlank(),

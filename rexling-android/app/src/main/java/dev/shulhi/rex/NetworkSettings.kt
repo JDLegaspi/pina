@@ -31,6 +31,8 @@ internal object NetworkSettings {
     val revision=MutableStateFlow(0L)
     private val preferences get()=context.getSharedPreferences("network",Context.MODE_PRIVATE)
     val builtIn get()=preferences.getBoolean("built_in",false)
+    fun route(endpoint: String)=ServerNetworkRoute.decode(JSONObject(preferences.getString("routes","{}")!!).optString(endpoint))
+    val tailscaleEnabled get()=!preferences.getBoolean("tailscale_suspended",false) && (builtIn || preferences.getBoolean("tailscale_prepared",false) || JSONObject(preferences.getString("routes","{}")).let {routes->routes.keys().asSequence().any {routes.optString(it)=="builtin"}})
     val controlUrl get()=preferences.getString("control_url","").orEmpty()
     private fun vaultKey(): SecretKey {
         val store=KeyStore.getInstance("AndroidKeyStore").apply {load(null)}
@@ -53,6 +55,13 @@ internal object NetworkSettings {
     private fun command(type: String,body: JSONObject=JSONObject()): JSONObject = JSONObject(NativeBridge.networkCommand(body.put("type",type).toString()))
     fun initialize(application: Context) {
         context=application.applicationContext as Application
+        if(!preferences.getBoolean("per_server_routes",false)) {
+            val app=context.getSharedPreferences("rex",Context.MODE_PRIVATE)
+            val endpoints=SavedServers.decode(app.getString("servers",null),app.getString("endpoint","").orEmpty()).map {it.endpoint}
+            val routes=migratedServerRoutes(JSONObject(preferences.getString("routes","{}")!!),endpoints,builtIn)
+            preferences.edit().putString("routes",routes.toString()).putBoolean("tailscale_prepared",tailscaleEnabled)
+                .putBoolean("built_in",false).putBoolean("per_server_routes",true).commit()
+        }
         // Install configuration before any terminal or monitoring service can connect.
         interfaces()
         configure()
@@ -82,6 +91,7 @@ internal object NetworkSettings {
         val ssh=JSONObject();val saved=keys()
         saved.keys().forEach {endpoint->runCatching {ssh.put(endpoint,JSONObject().put("key",decrypt(saved.getString(endpoint))))}}
         val config=JSONObject().put("built_in",builtIn).put("control_url",controlUrl).put("directory",context.filesDir.resolve("tailscale").absolutePath)
+            .put("built_in_suspended",preferences.getBoolean("tailscale_suspended",false)).put("built_in_enabled",tailscaleEnabled).put("routes",JSONObject(preferences.getString("routes","{}")!!))
             .put("ssh",ssh).put("trusted",JSONObject(preferences.getString("trusted","{}")!!))
         val error=command("configure",JSONObject().put("config",config)).optString("error").takeIf {it.isNotEmpty()}
         if(error==null) revision.value=revision.value+1
@@ -93,9 +103,36 @@ internal object NetworkSettings {
             val uri=runCatching {java.net.URI(trimmed)}.getOrNull()
             if(uri==null || uri.scheme !in listOf("https","http") || uri.host.isNullOrEmpty() || uri.userInfo!=null || uri.query!=null || uri.fragment!=null) return@withLock "Enter a complete control server HTTP(S) URL"
         }
-        preferences.edit().putBoolean("built_in",enabled).putString("control_url",trimmed).commit()
+        preferences.edit().putBoolean("built_in",enabled).apply {if(enabled) putBoolean("tailscale_suspended",false)}.putString("control_url",trimmed).commit()
         configure()
     }}
+    suspend fun saveRoute(endpoint: String,route: ServerNetworkRoute): String? = withContext(Dispatchers.IO) {mutex.withLock {
+        val routes=JSONObject(preferences.getString("routes","{}")!!)
+        if(ServerNetworkRoute.decode(routes.optString(endpoint))==route) return@withLock null
+        routes.put(endpoint,route.key)
+        preferences.edit().putString("routes",routes.toString()).commit()
+        configure()
+    }}
+    suspend fun prepareBuiltIn(url: String): String? = withContext(Dispatchers.IO) {mutex.withLock {
+        val trimmed=url.trim().trimEnd('/')
+        if(trimmed.isNotEmpty()) {
+            val uri=runCatching {java.net.URI(trimmed)}.getOrNull()
+            if(uri==null || uri.scheme !in listOf("http","https") || uri.host.isNullOrEmpty() || uri.userInfo!=null || uri.query!=null || uri.fragment!=null) return@withLock "Enter a complete control server HTTP(S) URL"
+        }
+        preferences.edit().putBoolean("tailscale_suspended",false).putBoolean("tailscale_prepared",true).putString("control_url",trimmed).commit();configure()
+    }}
+    suspend fun cancelLogin(): String? = withContext(Dispatchers.IO) {mutex.withLock {
+        val response=command("cancel_login")
+        val error=response.optString("error").takeIf {it.isNotBlank()}
+        if(error==null) {
+            preferences.edit().putBoolean("tailscale_suspended",true).putBoolean("tailscale_prepared",false).commit()
+            // Do not reconfigure or bump the revision: phone-network SSH/Rex
+            // connections must remain untouched by cancelling an enrollment.
+        }
+        status.value=command("status")
+        error
+    }}
+    suspend fun refreshStatus()=withContext(Dispatchers.IO) {status.value=command("status")}
     suspend fun importKey(endpoint: String,text: String,passphrase: String): String? = withContext(Dispatchers.IO) {mutex.withLock {
         if(text.toByteArray().size>131072) return@withLock "SSH key is too large"
         val response=command("import_key",JSONObject().put("key",text).put("passphrase",passphrase))
@@ -113,7 +150,9 @@ internal object NetworkSettings {
         val trusted=JSONObject(preferences.getString("trusted","{}")!!)
         fun authority(value: String): String? = runCatching {val uri=java.net.URI(value);val host=uri.host.removePrefix("[").removeSuffix("]");if(uri.scheme!="ssh") null else "${if(host.contains(':')) "[$host]" else host}:${if(uri.port<0) 22 else uri.port}"}.getOrNull()
         authority(endpoint)?.let {host->if(remaining.none {authority(it)==host}) trusted.remove(host)}
-        preferences.edit().putString("keys",saved.toString()).putString("trusted",trusted.toString()).commit();configure()
+        val routes=JSONObject(preferences.getString("routes","{}")!!)
+        if(endpoint !in remaining) routes.remove(endpoint)
+        preferences.edit().putString("keys",saved.toString()).putString("trusted",trusted.toString()).putString("routes",routes.toString()).commit();configure()
     }}}
     suspend fun login(): String? = withContext(Dispatchers.IO) {command("login").optString("error").takeIf {it.isNotEmpty()}}
 }

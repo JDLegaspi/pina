@@ -234,3 +234,43 @@ func TestAndroidFixture(t *testing.T) {
 		}()
 	}
 }
+
+func TestPerServerNetworkRoutes(t *testing.T) {
+	c := configuration{BuiltIn: false, Routes: map[string]string{"https://studio": "builtin", "ssh://me@shipyard": "phone"}}
+	if !c.tailscaleEnabled() {
+		t.Fatal("a built-in server must enable the tailnet transport")
+	}
+	if !c.builtInFor("https://studio/") {
+		t.Fatal("Rust URL's root slash must match saved server")
+	}
+	if c.builtInFor("https://other/") {
+		t.Fatal("unrelated servers must keep phone routing")
+	}
+	c.BuiltIn = true
+	if c.builtInFor("ssh://me@shipyard") {
+		t.Fatal("phone override must bypass global built-in default")
+	}
+	if !c.builtInFor("https://other") {
+		t.Fatal("default must follow global setting")
+	}
+	c.BuiltIn = false
+	c.Routes = nil
+	c.Enabled = true
+	if !c.tailscaleEnabled() || c.builtInFor("https://other") {
+		t.Fatal("preparing sign-in must not change other servers' routes")
+	}
+}
+
+func TestCancelledEnrollmentKeepsServerRoutesButDoesNotRestartTailscale(t *testing.T) {
+	c := configuration{Enabled: true, Suspended: true, Routes: map[string]string{"https://tailnet": "builtin", "https://phone": "phone"}}
+	if c.tailscaleEnabled() {
+		t.Fatal("cancelled enrollment must not restart from a saved built-in route")
+	}
+	if !c.builtInFor("https://tailnet/") || c.builtInFor("https://phone/") {
+		t.Fatal("cancellation must preserve each server route")
+	}
+	c.Suspended = false
+	if !c.tailscaleEnabled() {
+		t.Fatal("explicit setup must be able to resume")
+	}
+}

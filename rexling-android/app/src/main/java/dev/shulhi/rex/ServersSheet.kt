@@ -19,6 +19,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+
+@Composable internal fun EmptyServerContent(onAdd: ()->Unit) {
+    Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        Text("Welcome to Rexling",style=SettingsType.title)
+        Text("Add a Rex server to get started. Choose your phone’s network or built-in Tailscale during setup.",style=SettingsType.body,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        Button(onClick=onAdd) {ChromeSymbol(ChromeIcon.ADD,Modifier.size(18.dp),color=LocalContentColor.current);Spacer(Modifier.width(6.dp));Text("Add server")}
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun ServersSheet(model: RexModel,onDismiss: ()->Unit) {
@@ -73,11 +82,19 @@ import androidx.compose.ui.unit.sp
 }
 
 @Composable internal fun ServerEditor(server: ServerProfile?,onClose: ()->Unit,onSave: (String,String,ServerIcon)->String?) {
+    val networkStatus by NetworkSettings.status.collectAsState()
+    val tailnetConnected=networkStatus.optJSONObject("tailscale")?.optString("BackendState")=="Running"
     var name by remember(server?.id) {mutableStateOf(server?.label.orEmpty())}
     var endpoint by remember(server?.id) {mutableStateOf(server?.endpoint.orEmpty())}
     var icon by remember(server?.id) {mutableStateOf(server?.icon ?: ServerIcon.GLOBE)}
     var error by remember {mutableStateOf<String?>(null)}
-    AlertDialog(onDismissRequest=onClose,title={Text(if(server==null) "Add server" else "Edit server",style=SettingsType.title)},text={
+    var route by remember(server?.id) {mutableStateOf(NetworkSettings.route(server?.endpoint.orEmpty()))}
+    var routesOpen by remember {mutableStateOf(false)}
+    var networkOpen by remember {mutableStateOf(false)}
+    var busy by remember {mutableStateOf(false)}
+    val scope=rememberCoroutineScope()
+    if(networkOpen) NetworkSheet(onClose={networkOpen=false})
+    AlertDialog(onDismissRequest={if(!busy) onClose()},title={Text(if(server==null) "Add server" else "Edit server",style=SettingsType.title)},text={
         Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically) {
                 ServerIconPicker(icon,compact=true) {icon=it}
@@ -86,12 +103,35 @@ import androidx.compose.ui.unit.sp
             OutlinedTextField(endpoint,{endpoint=it;error=null},Modifier.fillMaxWidth(),label={Text("Server URL")},singleLine=true,textStyle=SettingsType.body,
                 keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Uri),placeholder={Text("https://host.tailnet.ts.net",fontSize=11.sp)})
             Text(if(endpoint.startsWith("ssh://")) "SSH to a host running Rex." else "Use an HTTPS address, or ssh://user@host.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(runCatching {ServerProfile.normalizeEndpoint(endpoint)}.isSuccess) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.5f)).padding(12.dp)) {
+                Text("Connection network",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Box {
+                    TextButton(enabled=!busy,onClick={routesOpen=true},contentPadding=PaddingValues(horizontal=0.dp,vertical=4.dp)) {Text(route.label,style=SettingsType.row);Text(" ▾")}
+                    DropdownMenu(expanded=routesOpen,onDismissRequest={routesOpen=false}) {
+                        ServerNetworkRoute.entries.forEach {choice->DropdownMenuItem(text={Text(choice.label,style=SettingsType.row)},onClick={route=choice;routesOpen=false})}
+                    }
+                }
+                if(route==ServerNetworkRoute.BUILTIN) {
+                    Text("Use a tailnet IP or device name. No Tailscale VPN app required.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick={networkOpen=true},contentPadding=PaddingValues(horizontal=0.dp,vertical=4.dp)) {Text(if(tailnetConnected) "Connected" else "Set up / sign in",style=SettingsType.detail)}
+                } else Text("Use this phone’s network and existing VPN.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if(endpoint.startsWith("ssh://")) {
                 val normalized=runCatching {ServerProfile.normalizeEndpoint(endpoint)}.getOrNull()
                 if(normalized!=null) SshKeyEditor(normalized)
             }
             error?.let {Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
         }
-    },confirmButton={Button(onClick={error=onSave(name,endpoint,icon);if(error==null) onClose()},enabled=endpoint.isNotBlank()) {Text("Save & connect")}},
-        dismissButton={TextButton(onClick=onClose) {Text("Cancel")}})
+    },confirmButton={Button(onClick={
+        val profile=runCatching {ServerProfile.create(name,endpoint,icon=icon)}.getOrElse {error=it.message;return@Button}
+        val requestedRoute=route
+        busy=true
+        scope.launch {
+            val previous=NetworkSettings.route(profile.endpoint)
+            error=runCatching {NetworkSettings.saveRoute(profile.endpoint,requestedRoute) ?: onSave(profile.label,profile.endpoint,profile.icon)}.getOrElse {"Could not save server network"}
+            if(error!=null && previous!=requestedRoute) NetworkSettings.saveRoute(profile.endpoint,previous)
+            busy=false;if(error==null) onClose()
+        }
+    },enabled=endpoint.isNotBlank() && !busy) {Text(if(busy) "Saving…" else "Save & connect")}},
+        dismissButton={TextButton(enabled=!busy,onClick=onClose) {Text("Cancel")}})
 }

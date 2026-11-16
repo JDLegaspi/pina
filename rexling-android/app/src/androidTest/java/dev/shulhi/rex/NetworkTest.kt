@@ -25,6 +25,14 @@ class NetworkTest {
             assertFalse(result.toString(),result.has("error"))
             assertTrue(result.toString(),result.has("tailscale"))
             assertEquals("NeedsLogin",result.getJSONObject("tailscale").getString("BackendState"))
+            val routes=context.getSharedPreferences("network",0).getString("routes","{}")
+            val revision=NetworkSettings.revision.value
+            assertNull(NetworkSettings.cancelLogin())
+            assertFalse(NetworkSettings.tailscaleEnabled)
+            assertEquals(routes,context.getSharedPreferences("network",0).getString("routes","{}"))
+            assertEquals("Cancelling login must not retry other server connections",revision,NetworkSettings.revision.value)
+            val cancelled=JSONObject(NativeBridge.networkCommand("{\"type\":\"status\"}"))
+            assertFalse(cancelled.optBoolean("built_in"));assertFalse(cancelled.has("tailscale"))
             assertTrue(context.filesDir.resolve("tailscale").listFiles().orEmpty().any {it.isDirectory})
         } finally {NetworkSettings.save(false,"")}
     }

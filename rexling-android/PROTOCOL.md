@@ -1075,3 +1075,43 @@ DECSCUSR default/reset. Explicit DECSCUSR steady block/bar/underline requests
 retain priority, including snapshot restoration. DEC mode 12 still controls live
 blinking; libghostty snapshots do not distinguish a mode-12-only override from
 the configured default when the cursor shape still follows that default.
+
+### Per-server network routes and Tailscale sign-in
+
+Add/Edit server shows Phone network/VPN or Built-in Tailscale once a valid
+HTTP(S), WS(S) or SSH endpoint is entered. The route belongs to that normalized
+endpoint; there is no app-wide routing choice in the UI. Existing app-wide
+choices are migrated once to each saved endpoint so upgrading does not change
+its connection path. New servers start with Phone network/VPN. Native HTTP and
+SSH dials use the same route decision. HTTP root slashes added by the Rust URL
+formatter are normalized before matching the saved route. Network preferences
+manage the Tailscale account/control server and show status with active peers
+and their direct/relay routes together in one card.
+
+The server editor links directly to built-in setup. Sign in applies the setup,
+starts interactive authentication, polls for AuthURL, and opens it in the
+browser. A visible busy state and bounded timeout/error replace silent clicks.
+NeedsLogin and NeedsMachineAuth are shown as Sign-in required and Device
+approval required in a connection status card. Browser approval remains with
+the user.
+
+Empty installations lead with Add server and open the full server editor rather
+than a Tailscale-specific quick-connect form. Connected tailnets show Connected
+with a checkmark, including in the server editor; stale AuthURL values do not
+restore sign-in actions after BackendState becomes Running. Add server's plus
+icon inherits the button content color.
+
+Network preferences distinguish the current server connection from the embedded
+client. The Current server card shows its configured Phone network/VPN or
+Built-in Tailscale route and Rex connection status. The separate Built-in
+Tailscale card shows Not set up when unconfigured, and an empty backend status
+is Not connected rather than an indefinite Starting message. This does not
+claim to inspect the separate Android Tailscale app's account or tunnel state.
+
+Pending browser enrollment offers Continue in browser and Cancel sign-in.
+Cancellation logs out only an unfinished enrollment, stops the embedded node,
+and persists a suspended state so saved built-in routes cannot restart it
+until the user explicitly sets up again. It clears the pending status/link and
+returns to Not set up while preserving server routes and the control-server
+URL. It does not reconfigure SSH clients or increment the network retry
+revision. Native cancellation refuses a node already in Running state.

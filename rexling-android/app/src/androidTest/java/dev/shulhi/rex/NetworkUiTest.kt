@@ -4,7 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.runBlocking
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import org.junit.Assert.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -68,6 +73,86 @@ class NetworkUiTest {
         InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot().let {bitmap->
             File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null),"network-settings.png").outputStream().use {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
         }
+    }
+    @Test fun serverEditorOffersPerServerNetworkAndSetup() {
+        compose.setContent {MaterialTheme {ServerEditor(null,{}, {_,_,_->null})}}
+        compose.onNodeWithText("Connection network").assertDoesNotExist()
+        compose.onNodeWithText("Server URL").performTextInput("https://shipyard")
+        compose.onNodeWithText("Phone network / VPN").performScrollTo().performClick()
+        compose.onNodeWithText("Built-in Tailscale").performClick()
+        compose.onNodeWithText("Set up / sign in").assertIsDisplayed()
+        compose.onNodeWithText("Built-in Tailscale").performClick()
+        compose.onNodeWithText("Phone network / VPN").performClick()
+        compose.onNodeWithText("Use this phone’s network and existing VPN.").assertIsDisplayed()
+    }
+    @Test fun signInStatusHasReadableLabelAndBusyFeedback() {
+        var busy by androidx.compose.runtime.mutableStateOf(false)
+        var clicks=0
+        compose.setContent {MaterialTheme {TailscaleStatusCard("NeedsLogin",busy) {clicks++;busy=true}}}
+        compose.onNodeWithText("Sign-in required").assertIsDisplayed()
+        compose.onNodeWithText("NeedsLogin").assertDoesNotExist()
+        compose.onNodeWithText("Sign in").performClick()
+        compose.runOnIdle {assertEquals(1,clicks)}
+        compose.onNodeWithText("Sign in").assertDoesNotExist()
+    }
+    @Test fun connectedStatusReplacesSignInRatherThanOfferingItAgain() {
+        var state by androidx.compose.runtime.mutableStateOf("NeedsLogin")
+        compose.setContent {MaterialTheme {TailscaleStatusCard(state,false) {}}}
+        compose.onNodeWithText("Sign in").assertIsDisplayed()
+        compose.runOnIdle {state="Running"}
+        compose.onNodeWithText("Connected").assertIsDisplayed()
+        compose.onNodeWithTag("Tailscale connected icon").assertIsDisplayed()
+        compose.onNodeWithText("Sign in").assertDoesNotExist()
+        compose.onNodeWithText("Sign in again").assertDoesNotExist()
+    }
+    @Test fun emptyServerStateOpensAddServerInsteadOfQuickTailscaleSetup() {
+        var added=0
+        compose.setContent {MaterialTheme {EmptyServerContent {added++}}}
+        compose.onNodeWithText("Welcome to Rexling").assertIsDisplayed()
+        compose.onNodeWithText("Rex server URL").assertDoesNotExist()
+        compose.onNodeWithText("Connect over Tailscale").assertDoesNotExist()
+        compose.onNodeWithText("Add server").performClick()
+        compose.runOnIdle {assertEquals(1,added)}
+    }
+    @Test fun connectedDevicesAndRoutesShareTheTailnetStatusCard() {
+        var dark by androidx.compose.runtime.mutableStateOf(false)
+        compose.setContent {RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+            androidx.compose.material3.Surface(color=MaterialTheme.colorScheme.background) {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth().padding(20.dp)) {
+                TailscaleStatusCard("Running",false,listOf(TailscalePeerStatus("shipyard-rex","Direct"),TailscalePeerStatus("MacBook","Tailscale relay"))) {}
+            }}
+        }}
+        for(value in listOf(false,true)) {
+            compose.runOnIdle {dark=value}
+            compose.onNodeWithText("Connected").assertIsDisplayed()
+            compose.onNodeWithText("Active connections").assertIsDisplayed()
+            compose.onNodeWithText("shipyard-rex").assertIsDisplayed()
+            compose.onNodeWithText("Direct").assertIsDisplayed()
+            compose.onNodeWithText("Sign in").assertDoesNotExist()
+            compose.waitForIdle()
+            val image=compose.onRoot().captureToImage().asAndroidBitmap()
+            File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir,"tailnet-card-${if(value) "dark" else "light"}.png").outputStream().use {image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+        }
+    }
+    @Test fun phoneVpnConnectionIsSeparateFromUnconfiguredBuiltInTailscale() {
+        compose.setContent {MaterialTheme {Column {
+            ServerNetworkStatusCard("Shipyard",ServerNetworkRoute.PHONE,true)
+            TailscaleStatusCard("Off",false) {}
+        }}}
+        compose.onNodeWithText("Phone network / VPN").assertIsDisplayed()
+        compose.onNodeWithText("Connected").assertIsDisplayed()
+        compose.onNodeWithText("Not set up").assertIsDisplayed()
+        compose.onNodeWithText("Starting…").assertDoesNotExist()
+    }
+    @Test fun pendingSignInCanBeCancelledAndItsBrowserLinkDisappears() {
+        var pending by androidx.compose.runtime.mutableStateOf(true)
+        var continued=0
+        compose.setContent {MaterialTheme {if(pending) PendingTailscaleSignIn(false,{continued++},{pending=false}) else TailscaleStatusCard("Off",false) {}}}
+        compose.onNodeWithText("Continue in browser").assertIsDisplayed()
+        compose.onNodeWithText("Cancel sign-in").performClick()
+        compose.onNodeWithText("Continue in browser").assertDoesNotExist()
+        compose.onNodeWithText("Not set up").assertIsDisplayed()
+        compose.runOnIdle {assertEquals(0,continued)}
     }
     @Test fun sshEditorOffersKeyImportAndKeylessConnection() {
         compose.setContent {MaterialTheme {ServerEditor(ServerProfile.create("Test SSH","ssh://tester@example.com"),{}, {_,_,_->null})}}
