@@ -1136,3 +1136,25 @@ up to 64 configurations are saved. Saved configurations restore stopped, without
 persisting clicked URL queries or automatically opening a browser. Removing a
 server or changing its endpoint removes its forwards. Stopping releases the
 phone listener before remote cleanup, permitting immediate reuse of its port.
+
+## Custom keyboard toolbar
+
+Preferences → Keyboard toolbar edits up to seven terminal buttons; the keyboard
+toggle remains pinned at the right. Layouts may contain fewer buttons, including
+none. Empty layouts retain access to extra keys. Existing installs keep the
+original seven buttons. The editor has a toolbar area and an available-button palette. Hold and drag
+within the toolbar to reorder, into it to add, or back into the palette to
+remove. At capacity, dropping a new button onto a slot replaces it. Canceled
+drags leave the draft untouched. The editor uses fixed bottom-dialog chrome without a bottom sheet draggable
+or nested-scroll dismiss handler, so the grid owns normal scrolling and flings.
+It uses the haze effect without the continuous popup backdrop invalidator.
+Close, Back and outside taps remain supported; inside blank taps do not dismiss.
+Taps and accessibility actions offer the same
+editing operations. Changes and resets stay in a draft until Save.
+Stable IDs are stored in the model's preferences, with unknown and duplicate IDs
+filtered and the seven-button cap enforced on load and save.
+
+The toolbar uses the existing Ctrl shortcut, Shift press/release, joystick and
+keyboard components. Changing the layout does not recreate the terminal input
+view or change its keyboard configuration. The expanded function/navigation keys
+remain available independently of the chosen primary buttons.

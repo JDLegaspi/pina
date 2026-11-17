@@ -139,6 +139,12 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         minimizeFloatingPanes=value
         preferences.edit {putBoolean("minimize_floating_panes",value)}
     }
+    internal var toolbarKeys by mutableStateOf(ToolbarLayout.decode(preferences.getString("keyboard_toolbar",null)))
+        private set
+    internal fun changeToolbar(keys: List<ToolbarKey>) {
+        toolbarKeys=ToolbarLayout.normalize(keys)
+        preferences.edit {putString("keyboard_toolbar",ToolbarLayout.encode(toolbarKeys))}
+    }
     internal var arrowJoystickEnabled by mutableStateOf(preferences.getBoolean("arrow_joystick_enabled",true))
         private set
     internal fun changeArrowJoystick(value: Boolean) {arrowJoystickEnabled=value;preferences.edit {putBoolean("arrow_joystick_enabled",value)}}
