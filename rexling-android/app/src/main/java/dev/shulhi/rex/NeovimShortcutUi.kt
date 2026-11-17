@@ -171,12 +171,11 @@ import kotlin.math.roundToInt
     enabled: Boolean=true,onEnabled: (Boolean)->Unit={},
     layout: NeovimShortcutLayout=NeovimShortcutLayout.GRID,onLayout: (NeovimShortcutLayout)->Unit={},
     effect: NeovimShortcutEffect=NeovimShortcutEffect.FAN_OUT,onEffect: (NeovimShortcutEffect)->Unit={},
-    hapticsEnabled: Boolean=true,onHaptics: (Boolean)->Unit={}) {
+    hapticsEnabled: Boolean=true,onHaptics: (Boolean)->Unit={},hazeState: dev.chrisbanes.haze.HazeState?=null) {
     var draft by rememberSaveable {mutableStateOf(NeovimShortcuts.editorText(items))}
     var error by remember {mutableStateOf<String?>(null)}
-    ModalBottomSheet(onDismissRequest=onClose,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxWidth().heightIn(max=680.dp).verticalScroll(rememberScrollState()).padding(horizontal=20.dp).padding(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            SettingsHeader("Neovim shortcuts","Close Neovim shortcuts",onClose)
+    SettingsDrawer("Neovim shortcuts","Close Neovim shortcuts",onClose,hazeState) {
+        Column(Modifier.fillMaxWidth().heightIn(max=600.dp).verticalScroll(rememberScrollState()).padding(horizontal=16.dp).padding(top=8.dp,bottom=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth().toggleable(enabled,role=Role.Switch,onValueChange=onEnabled).padding(vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text("Enable Neovim shortcuts",Modifier.weight(1f),style=SettingsType.row)
                 Switch(checked=enabled,onCheckedChange=null)

@@ -46,15 +46,18 @@ pub async fn run(
     mut cancel: oneshot::Receiver<()>,
     status: impl Fn(Value),
 ) -> Result<()> {
-    let listener = TcpListener::bind(("127.0.0.1", request.local_port))
-        .await
-        .map_err(|error| {
-            if request.local_port == 0 {
-                anyhow::anyhow!("Could not open a local port on this phone: {error}")
-            } else {
-                anyhow::anyhow!("Phone port {} is unavailable: {error}. Leave Phone port blank to choose automatically.", request.local_port)
+    // A replacement may arrive just after its old worker was cancelled.
+    // Bind atomically; never probe then relinquish a supposedly available port.
+    let deadline=tokio::time::Instant::now()+Duration::from_millis(1000);
+    let listener=loop {
+        match TcpListener::bind(("127.0.0.1",request.local_port)).await {
+            Ok(listener)=>break listener,
+            Err(error) if request.local_port!=0 && error.kind()==std::io::ErrorKind::AddrInUse && tokio::time::Instant::now()<deadline=> {
+                tokio::select! { _=tokio::time::sleep(Duration::from_millis(50))=>(), _=&mut cancel=>return Ok(()) }
             }
-        })?;
+            Err(error)=>return Err(anyhow::Error::new(error).context(format!("Phone port {} is unavailable",request.local_port))),
+        }
+    };
     let address = listener.local_addr()?.to_string();
     let mut block: Option<String> = None;
     let mut token: Option<String> = None;
@@ -137,6 +140,8 @@ pub async fn run(
         tokio::select! { _ = tokio::time::sleep(Duration::from_secs(delay)) => (), _ = &mut cancel => break }
         delay = (delay * 2).min(8);
     }
+    // Release the phone port before remote cleanup, which may require a retry.
+    drop(listener);
     // This connection only closes the detached tunnel that this worker created.
     let cleanup = async {
         let mut control =
@@ -276,6 +281,23 @@ mod tests {
                 .to_string()
                 .contains(&format!("Phone port {port} is unavailable"))
         );
-        assert!(error.to_string().contains("choose automatically"));
+        assert!(error.chain().any(|cause|cause.downcast_ref::<std::io::Error>().is_some_and(|io|io.kind()==std::io::ErrorKind::AddrInUse)));
     }
+    #[tokio::test]
+    async fn cancelling_releases_the_phone_port_before_slow_remote_cleanup() {
+        let upstream=TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let request=Request {endpoint:Endpoint::new(&format!("http://{}",upstream.local_addr().unwrap()),Duration::from_secs(2)).unwrap(),session:"unused".into(),host:"127.0.0.1".into(),port:3000,local_port:0,id:"release-test".into()};
+        let (tx,rx)=oneshot::channel();let (frames,mut received)=tokio::sync::mpsc::unbounded_channel();
+        let task=tokio::spawn(run(request,rx,move |value|{let _=frames.send(value);}));
+        let frame=tokio::time::timeout(Duration::from_secs(1),received.recv()).await.unwrap().unwrap();
+        let address=frame["address"].as_str().unwrap();tx.send(()).unwrap();
+        let deadline=tokio::time::Instant::now()+Duration::from_millis(300);
+        loop {
+            if let Ok(listener)=TcpListener::bind(address).await {drop(listener);break;}
+            assert!(tokio::time::Instant::now()<deadline,"port remained held during remote cleanup");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(!task.is_finished(),"fixture must still be waiting on remote cleanup");task.abort();drop(upstream);
+    }
+
 }

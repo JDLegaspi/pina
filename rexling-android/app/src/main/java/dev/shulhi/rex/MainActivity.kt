@@ -97,8 +97,15 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun RexApp(model: RexModel) {
     val client=model.activeClient
-    CompositionLocalProvider(LocalKeepScreenAwake provides model.keepScreenAwake) {
-        key(model.activeServerId) {RexWorkspace(model,client)}
+    val noticeHaze=remember {HazeState()}
+    val captureNotice=rememberBackdropCapture(PortForwards.linkNotice!=null)
+    Box(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalKeepScreenAwake provides model.keepScreenAwake) {
+            Box(Modifier.fillMaxSize().then(if(captureNotice) Modifier.hazeSource(noticeHaze) else Modifier)) {
+                key(model.activeServerId) {RexWorkspace(model,client)}
+            }
+        }
+        ForwardLinkUi(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).imePadding().padding(end=12.dp,bottom=116.dp),hazeState=noticeHaze)
     }
     if(model.notificationNotice.isNotBlank()) AlertDialog(onDismissRequest={model.notificationNotice=""},title={Text("Notification")},text={Text(model.notificationNotice)},confirmButton={TextButton(onClick={model.notificationNotice=""}) {Text("OK")}})
 }
@@ -230,7 +237,7 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
         }
     }
     LaunchedEffect(picker) {if(picker=="sessions") model.refreshSessionDetails()}
-    val workspaceBackdrop=rememberBackdropCapture(menu || forwards || picker in setOf("tabs","panes","sessions") || model.activityVisible)
+    val workspaceBackdrop=rememberBackdropCapture(menu || forwards || preferencesOpen || servers || networkSettings || appearance || about || neovimSettings || fontPicker || alerts || picker in setOf("tabs","panes","sessions") || model.activityVisible)
     Surface(Modifier.fillMaxSize().then(if(workspaceBackdrop) Modifier.hazeSource(workspaceHaze) else Modifier),color=MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
             SessionHeader(sessionStrip,currentSessionKey,state.connected,model.sessionTargets.isNotEmpty(),
@@ -292,7 +299,15 @@ private data class TerminalCloseTarget(val session: String,val id: String,val la
                     if(blocks.isNotEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth().padding(bottom=3.dp)) {
                         if(!floatingActive || hiddenFloating!=chosen) LiveTerminal(client,carouselBlocks,chosen,liveBlock,state.programs,controlled,fontSize.toFloat(),
-                            client::type,client::scroll,client::wheel,client::takeControl,client::scrollToBottom,client::resize,::openPane,{picker="panes"},{terminalView=it},
+                            client::type,client::scroll,client::wheel,client::takeControl,client::scrollToBottom,client::resize,::openPane,{picker="panes"},{view->terminalView=view;view.onOpenLink={url->
+                                val loopback=LoopbackLink.parse(url)
+                                if(loopback==null) PortForwards.openBrowser(context,url)
+                                else if(ready && chosen==liveBlock && displayedSession.isNotBlank()) {
+                                    val sourceServer=model.activeServer;val sourceSession=displayedSession
+                                    withUploadNetwork({if(model.servers.any {it.id==sourceServer.id && it.endpoint==sourceServer.endpoint}) PortForwards.openLink(context,sourceServer,sourceSession,loopback)})
+                                }
+                                else PortForwards.notice="Wait for this pane to connect before forwarding its link."
+                            }},
                             Modifier.fillMaxSize(),floatingDock=floating.isNotEmpty(),paneLayout=window?.layout.orEmpty(),titles=state.titles,directories=state.directories,hazeState=terminalHaze,captureBackdrop=floatingBackdrop || wheelBackdrop || ownerBackdrop || readyBackdrop || model.images.state!=null,onImage=imageCommit,onPaste=::pasteClipboard)
                         if(floatingActive && hiddenFloating==chosen) Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
                             Text("Floating panes minimized",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -345,24 +360,29 @@ if(picker=="sessions") SessionSwitcher(model.sessionTargets,currentSessionKey,mo
                     onSelect={picker="";model.selectSessionTarget(it)},onClose={picker=""},onNew={picker="";newSession=true},hazeState=workspaceHaze)
     if(model.activityVisible) ActivitySheet(model.activitySources,model::refreshActivity,model::openActivity,onClose={model.showActivity(false)},onSeen=model::markActivitySeen,onMarkAll=model::markAllActivitySeen,hazeState=workspaceHaze)
     NetworkPrompts()
-    if(networkSettings) NetworkSheet(model.activeServer,state.connected) {networkSettings=false}
+    if(networkSettings) NetworkSheet(model.activeServer,state.connected,hazeState=workspaceHaze) {networkSettings=false}
     if(preferencesOpen) PreferencesSheet({preferencesOpen=false;appearance=true},{preferencesOpen=false;fontPicker=true},{preferencesOpen=false;alerts=true},{preferencesOpen=false;about=true},
         onNetwork={preferencesOpen=false;networkSettings=true},onClose={preferencesOpen=false},shortcutGesture=model.shortcutGesture,onShortcutGesture=model::changeShortcutGesture,
         onNeovim={preferencesOpen=false;neovimSettings=true},arrowJoystickEnabled=model.arrowJoystickEnabled,onArrowJoystick=model::changeArrowJoystick,
         codexTitleAttention=model.experimentalCodexAttention,onCodexTitleAttention=model::changeCodexAttention,
         minimizeFloatingPanes=model.minimizeFloatingPanes,onMinimizeFloatingPanes=model::changeMinimizeFloatingPanes,
-        keepScreenAwake=model.keepScreenAwake,onKeepScreenAwake=model::changeKeepScreenAwake)
+        keepScreenAwake=model.keepScreenAwake,onKeepScreenAwake=model::changeKeepScreenAwake,hazeState=workspaceHaze)
     if(neovimSettings) NeovimShortcutsSheet(model.neovimShortcuts,model::saveNeovimShortcuts,onClose={neovimSettings=false},
         enabled=model.neovimShortcutsEnabled,onEnabled=model::enableNeovimShortcuts,
         layout=model.neovimShortcutLayout,onLayout=model::changeNeovimShortcutLayout,effect=model.neovimShortcutEffect,onEffect=model::changeNeovimShortcutEffect,
-        hapticsEnabled=model.neovimShortcutHaptics,onHaptics=model::changeNeovimShortcutHaptics)
+        hapticsEnabled=model.neovimShortcutHaptics,onHaptics=model::changeNeovimShortcutHaptics,hazeState=workspaceHaze)
     if(model.images.notice.isNotEmpty()) AlertDialog(onDismissRequest={model.images.notice=""},title={Text("Image upload")},text={Text(model.images.notice)},confirmButton={TextButton(onClick={model.images.notice=""}) {Text("OK")}})
-    if(about) AboutSheet {about=false}
-    if(alerts) BackgroundAlertsDialog(model) {alerts=false}
-    if(forwards) PortForwardSheet(model.activeServer,state.selectedSession,state.connected,workspaceHaze,onClose={forwards=false}) {host,port,local->
-        withUploadNetwork({PortForwards.start(context,model.activeServer,state.selectedSession,host,port,local)})
+    if(about) AboutSheet(hazeState=workspaceHaze) {about=false}
+    if(alerts) BackgroundAlertsDialog(model,hazeState=workspaceHaze) {alerts=false}
+    if(forwards) PortForwardSheet(model.forwardServers(),model.activeServerId,workspaceHaze,onClose={forwards=false},onStart={id->
+        val saved=PortForwards.items.firstOrNull {it.id==id}
+        val target=model.forwardServers().firstOrNull {it.profile.id==saved?.serverId && it.profile.endpoint==saved.endpoint}
+        if(saved!=null && target!=null && target.session.isNotBlank()) PortForwards.update(saved.copy(session=target.session,server=target.profile.label))
+        withUploadNetwork({PortForwards.requestStart(context,id)})
+    }) {target,host,port,local->
+        withUploadNetwork({PortForwards.start(context,target.profile,target.session,host,port,local)})
     }
-    if(servers) ServersSheet(model){servers=false}
+    if(servers) ServersSheet(model,hazeState=workspaceHaze){servers=false}
     if(addServer) ServerEditor(null,onClose={addServer=false},onSave={label,url,icon->model.saveServer(null,label,url,icon)})
     if(picker=="tabs" || picker=="panes") TabPaneSwitcher(windows,window?.id.orEmpty(),chosen,
         state.programs,state.titles,state.directories,client::tabPaneIndex,ready,
@@ -384,8 +404,8 @@ if(picker=="sessions") SessionSwitcher(model.sessionTargets,currentSessionKey,mo
             }) {Text("Close",color=MaterialTheme.colorScheme.error)}},
             dismissButton={TextButton(onClick={closeTarget=null}) {Text("Cancel")}})
     }
-    if(appearance) AppearanceSheet(model.appearance,model.themes,model.theme(false),model.theme(true),model::changeAppearance,model::chooseTheme) {appearance=false}
-    if(fontPicker) FontSizeDialog(fontSize,model::changeFontSize) {fontPicker=false}
+    if(appearance) AppearanceSheet(model.appearance,model.themes,model.theme(false),model.theme(true),model::changeAppearance,model::chooseTheme,hazeState=workspaceHaze) {appearance=false}
+    if(fontPicker) FontSizeDialog(fontSize,model::changeFontSize,hazeState=workspaceHaze) {fontPicker=false}
     if(newSession) NewSessionDialog(model.activeServer.label,ready,client::createSession) {newSession=false}
 
 }
@@ -467,14 +487,14 @@ private fun getClipboard(context: Context)=context.getSystemService(Context.CLIP
         onInput,onScroll,onWheel,onActivate,onBottom,onDimensions,onSelect,onPanes,onView,modifier,client::bindTerminalView,onMouseClick=client::click,mouseTarget=client::keyTarget,onImage=onImage,onPaste=onPaste,imageTarget=client::imageInputTarget,bottomControlsInset=if(floatingDock) 56.dp else 0.dp,paneLayout=paneLayout,titles=titles,directories=directories,hazeState=hazeState,captureBackdrop=captureBackdrop)
 }
 
-@Composable private fun BackgroundAlertsDialog(model: RexModel,onClose: ()->Unit) {
+@Composable private fun BackgroundAlertsDialog(model: RexModel,hazeState: HazeState?=null,onClose: ()->Unit) {
     val context=LocalContext.current
     var denied by remember {mutableStateOf(false)}
     val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {granted->
         if(granted) {model.setBackgroundAlerts(true);denied=false} else denied=true
     }
-    AlertDialog(onDismissRequest=onClose,title={Text("Background alerts",style=SettingsType.title)},text={
-        Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    SettingsDrawer("Background alerts","Close background alerts",onClose,hazeState) {
+        Column(Modifier.fillMaxWidth().heightIn(max=600.dp).verticalScroll(rememberScrollState()).padding(horizontal=16.dp).padding(top=8.dp,bottom=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Get notified when a task finishes, needs input, approval, sign-in, or fails while Rexling is in the background or your phone is locked.",style=SettingsType.body)
             Text("A quiet monitoring notification stays visible. Stop it there, or turn this off. Closing Rexling stops monitoring.",style=SettingsType.body)
             Text("Your phone may delay alerts while sleeping.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -492,5 +512,6 @@ private fun getClipboard(context: Context)=context.getSystemService(Context.CLIP
                 TextButton(onClick={context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,context.packageName))}) {Text("Notification settings")}
             }
         }
-    },confirmButton={TextButton(onClick=onClose) {Text("Done")}})
+            TextButton(onClick=onClose,modifier=Modifier.align(Alignment.End)) {Text("Done")}
+    }
 }

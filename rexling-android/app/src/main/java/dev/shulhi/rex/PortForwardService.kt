@@ -12,28 +12,10 @@ import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.util.UUID
 
-internal data class PortForward(
-    val id: String, val server: String, val host: String, val port: Int,
-    val phase: String="connecting", val address: String="", val error: String=""
-) {
-    val url get()="http://$address"
-    val target get()=if(':' in host) "[$host]:$port" else "$host:$port"
-}
-internal object PortForwards {
-    val items=mutableStateListOf<PortForward>()
-    var notice by androidx.compose.runtime.mutableStateOf<String?>(null)
-    fun start(context: Context,server: ServerProfile,session: String,host: String,port: Int,localPort: Int) {
-        val intent=Intent(context,PortForwardService::class.java).setAction(PortForwardService.ADD)
-            .putExtra("id",UUID.randomUUID().toString()).putExtra("server",server.label).putExtra("endpoint",server.endpoint)
-            .putExtra("session",session).putExtra("host",host).putExtra("port",port).putExtra("local_port",localPort)
-        try {context.startForegroundService(intent)} catch(e: Exception) {notice=e.message ?: "Could not start port forwarding"}
-    }
-    fun stop(context: Context,id: String) {context.startService(Intent(context,PortForwardService::class.java).setAction(PortForwardService.CLOSE).putExtra("id",id))}
-}
 /** Owns the tunnel handles independently of the terminal view while the browser is open. */
 class PortForwardService: Service() {
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
-    private data class Worker(val handle: Long,val job: Job)
+    private data class Worker(val handle: Long,val job: Job,val generation: Long)
     private val workers=mutableMapOf<String,Worker>()
     private val notifications by lazy {getSystemService(NotificationManager::class.java)}
     override fun onCreate() {
@@ -43,12 +25,13 @@ class PortForwardService: Service() {
         })
     }
     override fun onStartCommand(intent: Intent?,flags: Int,startId: Int): Int {
-        if(intent?.action==STOP) {stopSelf();return START_NOT_STICKY}
+        if(intent?.action==STOP) {PortForwards.items.toList().filter {it.running}.forEach {PortForwards.markStopped(it.id)};stopSelf();return START_NOT_STICKY}
         if(intent?.action==CLOSE) {
             val id=intent.getStringExtra("id")
-            workers.remove(id)?.let {it.job.cancel();NativeBridge.forwardDestroy(it.handle)}
-            PortForwards.items.removeAll {it.id==id}
-            if(workers.isEmpty()) stopSelf() else ongoing()
+            val generation=intent.getLongExtra("generation",Long.MAX_VALUE)
+            workers[id]?.takeIf {it.generation<=generation}?.let {workers.remove(id);it.job.cancel();NativeBridge.forwardDestroy(it.handle)}
+            PortForwards.persist()
+            if(workers.isEmpty() && PortForwards.items.none {it.phase=="connecting"}) stopSelf() else ongoing()
             return START_NOT_STICKY
         }
         if(intent?.action!=ADD) {stopSelf();return START_NOT_STICKY}
@@ -56,31 +39,46 @@ class PortForwardService: Service() {
             val notification=notification()
             if(Build.VERSION.SDK_INT>=34) startForeground(NOTIFICATION,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
             else startForeground(NOTIFICATION,notification)
-            require(workers.size<8) {"Stop a forward before adding another (maximum 8)"}
             val id=requireNotNull(intent.getStringExtra("id"))
-            if(id in workers) return START_NOT_STICKY
-            val host=requireNotNull(intent.getStringExtra("host"))
-            val request=JSONObject().put("id",id).put("endpoint",intent.getStringExtra("endpoint"))
-                .put("session",intent.getStringExtra("session")).put("host",host)
-                .put("port",intent.getIntExtra("port",0)).put("local_port",intent.getIntExtra("local_port",0))
+            val item=PortForwards.items.firstOrNull {it.id==id}
+            if(item==null || item.phase!="connecting") {if(workers.isEmpty()) stopSelf();return START_NOT_STICKY}
+            workers[id]?.let {
+                if(it.generation==item.generation) return START_NOT_STICKY
+                workers.remove(id);it.job.cancel();NativeBridge.forwardDestroy(it.handle)
+            }
+            require(workers.size<8) {"Stop a forward before adding another (maximum 8)"}
+            val request=JSONObject().put("id","$id-${UUID.randomUUID().toString().replace("-", "").take(16)}").put("endpoint",item.endpoint)
+                .put("session",item.session).put("host",item.host).put("port",item.port).put("local_port",item.localPort)
             val handle=NativeBridge.forwardCreate(request.toString())
             check(handle!=0L) {"Could not start forward"}
-            PortForwards.items.add(PortForward(id,intent.getStringExtra("server").orEmpty(),host,intent.getIntExtra("port",0)))
             val job=scope.launch {
                 while(isActive) {
                     val state=withContext(Dispatchers.IO) {JSONObject(NativeBridge.forwardPoll(handle))}
-                    val index=PortForwards.items.indexOfFirst {it.id==id}
-                    if(index<0) break
-                    val item=PortForwards.items[index]
-                    val next=item.copy(phase=state.optString("phase","failed"),address=state.optString("address"),error=state.optString("error"))
-                    if(next!=item) {PortForwards.items[index]=next;ongoing()}
-                    delay(400)
+                    val current=PortForwards.items.firstOrNull {it.id==id} ?: break
+                    if(current.generation!=item.generation) break
+                    val next=current.copy(phase=state.optString("phase","failed"),address=state.optString("address"),error=state.optString("error"))
+                    if(next!=current) {PortForwards.update(next);ongoing()}
+                    if(next.phase=="active") {
+                        if(next.localPort!=next.boundPort) {PortForwards.update(next.copy(localPort=next.boundPort));PortForwards.persist()};PortForwards.ready(next)
+                    }
+                    if(next.phase=="failed") {
+                        workers.remove(id);NativeBridge.forwardDestroy(handle)
+                        if(state.optBoolean("port_unavailable") && current.localPort>0) PortForwards.portBusy(this@PortForwardService,id)
+                        else PortForwards.failed(next)
+                        if(workers.isEmpty() && PortForwards.items.none {it.phase=="connecting"}) stopSelf()
+                        else ongoing()
+                        break
+                    }
+                    delay(250)
                 }
             }
-            workers[id]=Worker(handle,job)
+            workers[id]=Worker(handle,job,item.generation)
             ongoing()
         } catch(e: Exception) {
             PortForwards.notice=e.message ?: "Could not start port forwarding"
+            PortForwards.items.firstOrNull {it.id==intent.getStringExtra("id")}?.let {
+                val failed=it.copy(phase="failed",error=PortForwards.notice.orEmpty());PortForwards.update(failed);PortForwards.failed(failed)
+            }
             if(workers.isEmpty()) stopSelf()
         }
         return START_NOT_STICKY
@@ -93,10 +91,15 @@ class PortForwardService: Service() {
             .addAction(Notification.Action.Builder(null,"Stop all",stop).build()).build()
     }
     private fun ongoing() {notifications.notify(NOTIFICATION,notification())}
-    override fun onTaskRemoved(rootIntent: Intent?) {stopSelf()}
+    override fun onTaskRemoved(rootIntent: Intent?) {PortForwards.items.toList().filter {it.running}.forEach {PortForwards.markStopped(it.id)};stopSelf()}
     override fun onDestroy() {
-        workers.values.forEach {it.job.cancel();NativeBridge.forwardDestroy(it.handle)}
-        workers.clear();PortForwards.items.clear();scope.cancel();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
+        val owned=workers.toMap()
+        owned.values.forEach {it.job.cancel();NativeBridge.forwardDestroy(it.handle)}
+        workers.clear()
+        PortForwards.items.toList().filter {it.running && owned[it.id]?.generation==it.generation}.forEach {
+            PortForwards.update(it.copy(phase="stopped"));PortForwards.failed(it.copy(error="Forward stopped."))
+        }
+        PortForwards.persist();scope.cancel();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
     }
     override fun onBind(intent: Intent?): IBinder?=null
     companion object {

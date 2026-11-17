@@ -19,7 +19,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 class RexApplication: Application() {
-    override fun onCreate() {super.onCreate(); NetworkSettings.initialize(this)}
+    override fun onCreate() {super.onCreate(); PortForwards.initialize(this); NetworkSettings.initialize(this)}
 }
 
 /** Keys are encrypted individually with an app-only, non-exportable Android Keystore key. */

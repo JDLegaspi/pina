@@ -27,7 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun NetworkSheet(server: ServerProfile?=null,serverConnected: Boolean=false,onClose: ()->Unit) {
+@Composable internal fun NetworkSheet(server: ServerProfile?=null,serverConnected: Boolean=false,hazeState: dev.chrisbanes.haze.HazeState?=null,onClose: ()->Unit) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     val status by NetworkSettings.status.collectAsState()
@@ -62,9 +62,8 @@ import kotlinx.coroutines.withTimeoutOrNull
             finally {busy=false}
         }
     }
-    ModalBottomSheet(onDismissRequest=onClose,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=20.dp).padding(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            SettingsHeader("Network","Close network settings",onClose)
+    SettingsDrawer("Network","Close network settings",onClose,hazeState) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=16.dp).padding(top=8.dp,bottom=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             if(server!=null && server.endpoint.isNotBlank()) ServerNetworkStatusCard(server.label,NetworkSettings.route(server.endpoint),serverConnected)
             Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 TailscaleStatusCard(if(!NetworkSettings.tailscaleEnabled) "Off" else tailscale?.optString("BackendState").orEmpty(),busy,

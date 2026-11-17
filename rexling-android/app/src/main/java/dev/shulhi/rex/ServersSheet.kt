@@ -30,40 +30,41 @@ import kotlinx.coroutines.launch
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun ServersSheet(model: RexModel,onDismiss: ()->Unit) {
+@Composable internal fun ServersSheet(model: RexModel,hazeState: dev.chrisbanes.haze.HazeState?=null,onDismiss: ()->Unit) {
     var editing by remember {mutableStateOf<ServerProfile?>(null)}
     var editor by remember {mutableStateOf(false)}
-    ModalBottomSheet(onDismissRequest=onDismiss,containerColor=MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxWidth().heightIn(max=600.dp).verticalScroll(rememberScrollState()).padding(horizontal=18.dp).padding(bottom=25.dp)) {
-            Row(Modifier.fillMaxWidth().padding(bottom=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Servers",fontSize=20.sp,fontWeight=FontWeight.Bold)
-                    Text("${model.connectedCount} connected",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Button(onClick={editing=null;editor=true}) {Text("+ Add server")}
+    ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+        containerColor=Color.Transparent,tonalElevation=0.dp,dragHandle=null,contentWindowInsets={WindowInsets(0,0,0,0)}) {
+        Column(Modifier.drawerFrost(hazeState,BottomSheetDefaults.ExpandedShape).fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
+            DrawerHandle()
+            Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=16.dp,end=4.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Servers",Modifier.weight(1f),style=SettingsType.row,fontWeight=FontWeight.Bold)
+                ChromeButton(ChromeIcon.ADD,"Add server") {editing=null;editor=true}
+                ChromeButton(ChromeIcon.CLOSE,"Close servers",onClick=onDismiss)
             }
+        Column(Modifier.fillMaxWidth().heightIn(max=560.dp).verticalScroll(rememberScrollState()).padding(horizontal=16.dp).padding(bottom=12.dp)) {
+            Text("${model.connectedCount} connected",Modifier.padding(top=4.dp,bottom=8.dp),style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
             if(model.servers.isEmpty()) Text("Add a Rex server to get started.",Modifier.padding(vertical=16.dp))
             for(server in model.servers) {
                 val selected=server.id==model.activeServerId
                 val status=model.serverStatuses[server.id] ?: ServerStatus()
                 var menu by remember(server.id) {mutableStateOf(false)}
-                Row(Modifier.fillMaxWidth().padding(bottom=8.dp).clip(RoundedCornerShape(16.dp))
-                    .background(if(selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
-                    .border(1.dp,if(selected) MaterialTheme.colorScheme.primary.copy(alpha=.25f) else Color.Transparent,RoundedCornerShape(16.dp))
-                    .clickable {onDismiss();model.connectServer(server.id)}.padding(start=13.dp,top=12.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(bottom=4.dp).heightIn(min=56.dp).clip(RoundedCornerShape(12.dp))
+                    .background(if(selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha=.65f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.45f))
+                    .clickable {onDismiss();model.connectServer(server.id)}.padding(start=12.dp,top=8.dp,bottom=8.dp),verticalAlignment=Alignment.CenterVertically) {
                     Box(Modifier.size(7.dp).background(if(status.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,RoundedCornerShape(4.dp)))
                     Spacer(Modifier.width(11.dp))
                     ServerGlyph(server.icon,Modifier.size(22.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(server.label,fontWeight=FontWeight.SemiBold,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                        Text(server.endpoint,fontFamily=MonoUi,fontSize=10.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text(server.label,style=SettingsType.row,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text(server.endpoint,style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Text(when(status.phase) {
                             "connected"->if(selected) "Connected · viewing" else "Connected"
                             "connecting"->"Connecting…";"reconnecting"->"Reconnecting…";"paused"->"Paused"
                             "error"->"Connection failed";else->"Disconnected"
-                        },fontSize=11.sp,color=if(status.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                        if(status.error.isNotBlank()) Text(status.error,fontSize=10.sp,maxLines=2,overflow=TextOverflow.Ellipsis,color=MaterialTheme.colorScheme.error)
+                        },style=SettingsType.detail,color=if(status.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        if(status.error.isNotBlank()) Text(status.error,style=SettingsType.detail,maxLines=2,overflow=TextOverflow.Ellipsis,color=MaterialTheme.colorScheme.error)
                     }
                     Box {
                         ChromeButton(ChromeIcon.MORE,"Server actions for ${server.label}") {menu=true}
@@ -75,8 +76,9 @@ import kotlinx.coroutines.launch
                     }
                 }
             }
-            Text("Switch servers without closing their connections.",Modifier.padding(top=9.dp),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Switch servers without closing their connections.",Modifier.padding(top=9.dp),style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
     }
     if(editor) ServerEditor(editing,onClose={editor=false},onSave={label,endpoint,icon->model.saveServer(editing?.id,label,endpoint,icon)})
 }

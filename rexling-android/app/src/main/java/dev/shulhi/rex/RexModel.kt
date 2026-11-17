@@ -320,11 +320,19 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         else saveServer(null,"",normalized)?.let {throw IllegalArgumentException(it)}
     }.exceptionOrNull()?.message
 
+    internal fun forwardServers(): List<ForwardServer> {
+        val knownSessions=sessionTargets
+        return servers.map {server->
+        val state=connections[server.id]?.state?.value
+        ForwardServer(server,state?.selectedSession?.takeIf {it.isNotBlank()} ?: knownSessions.firstOrNull {it.server.id==server.id}?.session?.id.orEmpty(),serverStatuses[server.id]?.connected==true)
+        }
+    }
     fun saveServer(id: String?,label: String,endpoint: String,icon: ServerIcon?=null): String? = runCatching {
         val profile=ServerProfile.create(label,endpoint,id ?: java.util.UUID.randomUUID().toString(),icon ?: servers.firstOrNull {it.id==id}?.icon ?: ServerIcon.GLOBE)
         require(servers.none {it.id!=profile.id && it.endpoint==profile.endpoint}) {"That server is already saved"}
         val old=servers.firstOrNull {it.id==profile.id}
         if(old!=null && old.endpoint!=profile.endpoint) {
+            PortForwards.forgetServer(getApplication(),old.id)
             images.forget(old.id)
             connections.remove(old.id)?.let {it.releaseControl();it.disconnect();it.close()}
             observers.remove(old.id)?.cancel();serverStatuses=serverStatuses-old.id
@@ -342,6 +350,7 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         connections[id]?.let {it.releaseControl();it.disconnect()}
     }
     fun forgetServer(id: String) {
+        PortForwards.forgetServer(getApplication(),id)
         servers.firstOrNull {it.id==id}?.let {profile->NetworkSettings.forget(profile.endpoint,servers.filter {it.id!=id}.map {it.endpoint})}
         images.forget(id)
         if(activeServerId==id) serverSwitchSerial++

@@ -1115,3 +1115,24 @@ until the user explicitly sets up again. It clears the pending status/link and
 returns to Not set up while preserving server routes and the control-server
 URL. It does not reconfigure SSH clients or increment the network retry
 revision. Native cancellation refuses a node already in Running state.
+
+## Automatic localhost forwarding
+
+Tapping an HTTP(S) localhost, 127.0.0.1 or [::1] terminal link creates or reuses
+an outbound TCP forward through that pane's server and session. Paths, encoded
+queries, fragments and HTTPS are preserved. Browser opening is limited to the
+foreground activity; the notice also offers Open and Copy. Other links retain
+normal browser behavior, and copying a terminal link keeps its original URL.
+
+The phone listener prefers the remote port. Preferences offer Ask (default),
+Choose another phone port, or Stop the other Rexling forward. Replacement only
+stops an identified Rexling-owned forward; an unavailable port belonging to
+another app prompts instead. Automatic selection binds port zero atomically.
+Generation guards prevent delayed stop/poll events from overwriting a restart.
+
+The forwarding drawer groups saved forwards across all servers and offers
+Start, Stop, Remove, Open and Copy. Up to eight forwards may run concurrently;
+up to 64 configurations are saved. Saved configurations restore stopped, without
+persisting clicked URL queries or automatically opening a browser. Removing a
+server or changing its endpoint removes its forwards. Stopping releases the
+phone listener before remote cleanup, permitting immediate reuse of its port.

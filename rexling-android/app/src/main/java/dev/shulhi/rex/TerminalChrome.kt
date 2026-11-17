@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -73,7 +74,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, ADD, KEYBOARD, HIDE_KEYBOARD, LEFT, RIGHT, UP, DOWN, TAB, CLOSE, ESCAPE, CONTROL, ALT, SHIFT, POINTER, EYE, BACKSPACE, ARROWS, ENTER, SETTINGS, PASTE, IMAGE, SERVER, REFRESH, SUN, MOON, EDIT, UNPLUG, DELETE, FLOAT, CHECK }
+internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, ADD, KEYBOARD, HIDE_KEYBOARD, LEFT, RIGHT, UP, DOWN, TAB, CLOSE, ESCAPE, CONTROL, ALT, SHIFT, POINTER, EYE, BACKSPACE, ARROWS, ENTER, SETTINGS, PASTE, IMAGE, SERVER, REFRESH, SUN, MOON, EDIT, UNPLUG, DELETE, FLOAT, CHECK, PLAY, STOP }
 
 @Composable internal fun ChromeSymbol(icon: ChromeIcon, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
     Canvas(modifier.size(19.dp)) {
@@ -89,6 +90,8 @@ internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, A
             line(x+dx*6,y+dy*6,x+dx*2+dy*4,y+dy*2-dx*4)
         }
         when(icon) {
+            ChromeIcon.PLAY -> {drawPath(Path().apply {moveTo(8f*u,5f*u);lineTo(19f*u,12f*u);lineTo(8f*u,19f*u);close()},color,style=Stroke(width,join=StrokeJoin.Round))}
+            ChromeIcon.STOP -> {box(6f,6f,12f,12f,1.5f)}
             ChromeIcon.FLOAT -> {box(3f,7f,14f,14f);box(10f,3f,11f,10f)}
             ChromeIcon.SPLIT -> { box(3f,4f,18f,16f);line(12f,4f,12f,20f) }
             ChromeIcon.SEARCH -> { drawCircle(color,6f*u,Offset(10f*u,10f*u),style=Stroke(width));line(15f,15f,21f,21f) }
