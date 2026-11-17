@@ -93,6 +93,14 @@ Floating rectangles use translucent fill and dashed borders, retaining their rea
 geometry and stacking order. A compact Hide/Show floating control removes/restores
 only those overlays, allowing normal touch selection on a covered tiled pane.
 Toggling visibility does not select, open, close or move anything on the server.
+When navigating away from a floating terminal, the native actor retains at most
+one inactive floating data stream and Ghostty replica. It continues consuming
+output without publishing frames, taking input ownership, or replaying clipboard
+writes. Reopening that pane reuses its stream rather than downloading another
+full scrollback snapshot. Session changes, connection recovery, terminal closure,
+and stream errors invalidate the retained terminal. Another floating terminal
+evicts the previous one.
+
 Floating panes remain in the full list with a Floating caption. Visibility
 survives geometry refreshes within the same window and can be inspected while
 terminal actions are disabled.

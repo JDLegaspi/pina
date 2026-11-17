@@ -29,6 +29,9 @@ impl Drop for Peer {
 }
 impl Peer {
     async fn new(delay: Duration, reject: bool, drop_first: bool) -> Self {
+        Self::with_floating(delay,reject,drop_first,false).await
+    }
+    async fn with_floating(delay:Duration,reject:bool,drop_first:bool,floating:bool)->Self {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = Endpoint::new(
             &format!("http://{}", listener.local_addr().unwrap()),
@@ -99,7 +102,12 @@ impl Peer {
                                 } else if method=="data.connect" {response["payload"]=json!({"ticket":"AAAAAAAAAAAAAAAAAAAAAA"});}
                                 else if method=="session.list" || method=="session.attach_all" {response["payload"]=json!({"sessions":[]});}
                                 else if method=="session.view" || method=="session.attach" {
-                                    let view=json!({"windows":[{"window_id":"window:test","layers":[{"blocks":[{"block_id":"block:test","creator_name":"com.superlogical.terminal","owner":if reject {"client:other"} else {"client:test"}}]}]}]});
+                                    let mut view=json!({"windows":[{"window_id":"window:test","layers":[{"blocks":[{"block_id":"block:test","creator_name":"com.superlogical.terminal","owner":if reject {"client:other"} else {"client:test"}}]}]}]});
+                                    if floating {
+                                        view["windows"][0]["layers"][0]["kind"]=json!("floating");
+                                        view["windows"][0]["layers"][0]["layout"]=json!({"block_id":"block:test","rect":[0,0,1,1]});
+                                        view["windows"][0]["layers"].as_array_mut().unwrap().push(json!({"kind":"tiled","blocks":[{"block_id":"block:tiled","creator_name":"com.superlogical.terminal"}],"layout":{"block_id":"block:tiled","rect":[0,0,1,1]}}));
+                                    }
                                     response["payload"]=if method=="session.attach" {json!({"view":view})} else {view};
                                 }
                                 let gate=gate.clone();replies.push(Box::pin(async move {
@@ -355,6 +363,54 @@ async fn paste_remains_a_barrier_even_with_eight_input_requests_allowed() {
         assert_eq!(*peer.writes.lock().unwrap(), ["before", "PASTE", "after"]);
         peer.gate.add_permits(1);
         until(|| peer.acknowledged.load(Ordering::SeqCst) == 3).await;
+        shutdown(&tx).await;
+    });
+}
+
+#[tokio::test(flavor="current_thread")]
+async fn minimized_floating_terminal_reopens_live_without_another_snapshot() {
+    let peer=Peer::with_floating(Duration::ZERO,false,false,true).await;
+    let (mut actor,_)=peer.actor(8,true).await;
+    actor.controlled=false; // Viewing must never take ownership.
+    actor.refresh_view().await.unwrap();
+    let nonce=actor.data.as_ref().unwrap().nonce;
+    actor.open_block("block:tiled".into()).await.unwrap();
+    assert_eq!(actor.retained_floating.as_ref().unwrap().block,"block:test");
+    let cached=actor.retained_floating.as_mut().unwrap();
+    cached.replica.feed(b"\r\nUPDATED_WHILE_MINIMIZED\r\n").unwrap();
+    let before=peer.methods.lock().unwrap().iter().filter(|m|m.as_str()=="data.connect").count();
+    actor.open_block("block:test".into()).await.unwrap();
+    assert_eq!(actor.data.as_ref().unwrap().nonce,nonce);
+    assert!(actor.replica.as_mut().unwrap().terminal().unwrap().frame().unwrap().text().contains("UPDATED_WHILE_MINIMIZED"));
+    assert!(actor.dirty);
+    assert!(actor.retained_floating.is_none());
+    assert_eq!(before,peer.methods.lock().unwrap().iter().filter(|m|m.as_str()=="data.connect").count());
+    // Recovery must never reuse a stream from the old connection.
+    actor.controlled=false;
+    actor.open_block("block:tiled".into()).await.unwrap();
+    assert!(actor.retained_floating.is_some());
+    actor.lose_connections();
+    assert!(actor.retained_floating.is_none());
+}
+
+#[tokio::test(flavor="current_thread")]
+async fn retained_floating_stream_consumes_hidden_output_without_publishing_or_clipboard_replay() {
+    let peer=Peer::with_floating(Duration::ZERO,false,false,true).await;
+    let (mut actor,shared)=peer.actor(8,true).await;
+    actor.refresh_view().await.unwrap();
+    actor.open_block("block:tiled".into()).await.unwrap();
+    let before=peer.methods.lock().unwrap().iter().filter(|m|m.as_str()=="data.connect").count();
+    let (tx,rx)=mpsc::channel(128);
+    tokio::join!(actor.run(rx),async {
+        until(||shared.lock().unwrap().frame.is_some()).await;
+        peer.output.send(b"\r\nHIDDEN_LIVE_UPDATE\r\n\x1b]52;c;aGlkZGVu\x07".to_vec()).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        assert!(!shared.lock().unwrap().frame.as_ref().unwrap().text().contains("HIDDEN_LIVE_UPDATE"));
+        tx.send(json!({"type":"block","id":"block:test","navigationId":1})).await.unwrap();
+        until(||shared.lock().unwrap().frame.as_ref().is_some_and(|f|f.text().contains("HIDDEN_LIVE_UPDATE"))).await;
+        let state:Value=serde_json::from_str(&shared.lock().unwrap().json).unwrap();
+        assert!(state["clipboard"].is_null(),"hidden clipboard writes cannot replay on reopen");
+        assert_eq!(before,peer.methods.lock().unwrap().iter().filter(|m|m.as_str()=="data.connect").count());
         shutdown(&tx).await;
     });
 }
