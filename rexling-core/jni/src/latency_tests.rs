@@ -16,6 +16,7 @@ const SNAPSHOT: &[u8] = include_bytes!("../../tests/fixtures/ghostty-remote.bin"
 struct Peer {
     endpoint: Endpoint,
     gate: Arc<Semaphore>,
+    snapshot_gate: Arc<Semaphore>,
     writes: Arc<Mutex<Vec<String>>>,
     acknowledged: Arc<AtomicUsize>,
     methods: Arc<Mutex<Vec<String>>>,
@@ -32,6 +33,9 @@ impl Peer {
         Self::with_floating(delay,reject,drop_first,false).await
     }
     async fn with_floating(delay:Duration,reject:bool,drop_first:bool,floating:bool)->Self {
+        Self::with_snapshot(delay,reject,drop_first,floating,false).await
+    }
+    async fn with_snapshot(delay:Duration,reject:bool,drop_first:bool,floating:bool,slow_snapshot:bool)->Self {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = Endpoint::new(
             &format!("http://{}", listener.local_addr().unwrap()),
@@ -39,6 +43,8 @@ impl Peer {
         )
         .unwrap();
         let gate = Arc::new(Semaphore::new(0));
+        let snapshot_gate=Arc::new(Semaphore::new(if slow_snapshot {0} else {128}));
+        let history_gate=snapshot_gate.clone();
         let writes = Arc::new(Mutex::new(Vec::new()));
         let acknowledged = Arc::new(AtomicUsize::new(0));
         let methods = Arc::new(Mutex::new(Vec::new()));
@@ -66,6 +72,7 @@ impl Peer {
                     output_tx.clone(),
                     output_rx.clone(),
                 );
+                let history_gate=history_gate.clone();
                 peers.spawn(async move {
                     let mut ws=accept_hdr_async(socket,|request:&Request,mut response:Response|{
                         response.headers_mut().insert("Sec-WebSocket-Protocol",request.headers()["Sec-WebSocket-Protocol"].clone());Ok(response)
@@ -75,7 +82,17 @@ impl Peer {
                         let mut welcome=vec![0;32];welcome[0]=0x81;welcome[1..17].fill(1);
                         welcome[20..24].copy_from_slice(&60000u32.to_le_bytes());welcome[24..32].copy_from_slice(&NONCE.to_le_bytes());
                         ws.send(Message::Binary(welcome.into())).await.unwrap();
-                        ws.send(Message::Binary(SNAPSHOT.to_vec().into())).await.unwrap();
+                        if slow_snapshot {
+                            let mut end=10;
+                            loop {
+                                let tag=u16::from_le_bytes(SNAPSHOT[end..end+2].try_into().unwrap());
+                                end+=10+u32::from_le_bytes(SNAPSHOT[end+2..end+6].try_into().unwrap()) as usize;
+                                if tag==5 {break;}
+                            }
+                            ws.send(Message::Binary(SNAPSHOT[..end].to_vec().into())).await.unwrap();
+                            let permit=history_gate.acquire().await.unwrap();permit.forget();
+                            ws.send(Message::Binary(SNAPSHOT[end..].to_vec().into())).await.unwrap();
+                        } else {ws.send(Message::Binary(SNAPSHOT.to_vec().into())).await.unwrap();}
                         let mut rx=rx.lock().await;
                         loop {tokio::select! {
                             data=rx.recv()=>{let Some(data)=data else{break;};if ws.send(Message::Binary(data.into())).await.is_err(){break;}},
@@ -127,6 +144,7 @@ impl Peer {
         Self {
             endpoint,
             gate,
+            snapshot_gate,
             writes,
             acknowledged,
             methods,
@@ -411,6 +429,26 @@ async fn retained_floating_stream_consumes_hidden_output_without_publishing_or_c
         let state:Value=serde_json::from_str(&shared.lock().unwrap().json).unwrap();
         assert!(state["clipboard"].is_null(),"hidden clipboard writes cannot replay on reopen");
         assert_eq!(before,peer.methods.lock().unwrap().iter().filter(|m|m.as_str()=="data.connect").count());
+        shutdown(&tx).await;
+    });
+}
+
+#[tokio::test(flavor="current_thread")]
+async fn renders_the_screen_while_initial_history_is_still_blocked_on_the_network() {
+    let peer=Peer::with_snapshot(Duration::ZERO,false,false,false,true).await;
+    let (mut actor,shared)=peer.actor(8,true).await;
+    assert!(actor.replica.as_ref().unwrap().ready());
+    assert!(!actor.replica.as_ref().unwrap().snapshot_complete());
+    actor.dirty=true;
+    let (tx,rx)=mpsc::channel(128);
+    tokio::join!(actor.run(rx),async {
+        until(||shared.lock().unwrap().frame.is_some()).await;
+        assert_eq!(peer.snapshot_gate.available_permits(),0,"first frame must precede history delivery");
+        let first=shared.lock().unwrap().frame.clone().unwrap();
+        assert!(!first.text().trim().is_empty());
+        peer.snapshot_gate.add_permits(1);
+        peer.output.send(b"\r\nLIVE_AFTER_HISTORY\r\n".to_vec()).await.unwrap();
+        until(||shared.lock().unwrap().frame.as_ref().is_some_and(|f|f.text().contains("LIVE_AFTER_HISTORY"))).await;
         shutdown(&tx).await;
     });
 }

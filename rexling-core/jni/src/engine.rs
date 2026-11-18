@@ -1632,7 +1632,9 @@ fn preview_task(endpoint: Endpoint, session: String, ids: Vec<String>) -> Previe
                         Data::open(&endpoint, &mut control, &session, &id, Trace::default())
                             .await?;
                     let mut replica = Replica::new(data.nonce);
-                    while !replica.ready() {
+                    // One-shot previews need late Kitty pixels too. Only the
+                    // selected live terminal presents before FINISH.
+                    while !replica.snapshot_complete() {
                         replica.feed(&data.read().await?)?;
                     }
                     let frame = Arc::new(replica.terminal()?.frame()?);

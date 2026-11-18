@@ -141,6 +141,31 @@ actual layout and reports a potentially partial move, rather than retrying an
 operation that might undo an already-applied swap. This is server layout order,
 not a separate phone-only preference.
 
+## Screen-first snapshot restoration
+
+The selected terminal becomes renderable at Ghostty's READY checkpoint rather
+than waiting for FINISH and all retained history. The native shim uses a
+persistent callback-backed `ghostty_snapshot_decoder_ready` / `next` decoder.
+The framed reader supplies complete decoder operations: the live prefix through
+READY, then each history page (including its optional Kitty placements and
+required look-ahead header), image payload, and FINISH. Ghostty remains responsible
+for payload validation, CRCs, screen routing and history attachment. Temporary
+network starvation is never presented as EOF to its synchronous reader. The
+callback retains no borrowed network slice between calls, and the decoder is
+freed before its terminal on cancellation or errors.
+
+The actor can publish and scroll the initial screen while later history arrives.
+History import preserves an already-scrolled viewport; loaded Kitty pixels update
+the same terminal. Snapshot records are never interpreted as PTY output or
+clipboard writes. Only bytes after validated FINISH enter the live VT path.
+One-shot previews still wait through FINISH so their images are complete.
+
+This changes time to first display, not the Rex wire protocol or transfer volume.
+Rex API revision 16 sends the complete snapshot followed by live output on one
+ordered stream, with no advertised history range or screen-only request. History
+continues downloading in the background, and new output follows it. The existing
+128 MiB snapshot limit remains; the staging buffer is released at FINISH.
+
 ## Read-only carousel previews and session details
 
 The actor polls cancellable preview futures on its existing owner thread. A
