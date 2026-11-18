@@ -1243,3 +1243,28 @@ group or submenu. The group picker uses Ungrouped for direct menu entries.
 Reordering within either root section preserves the other section's original
 menu positions; merely opening, collapsing or saving the editor does not
 canonicalize the wheel/grid's root order.
+
+
+## Reusable SSH key library
+
+Preferences → SSH keys manages named private keys and their SHA-256 public-key
+fingerprints. The key library stores one AES-GCM Android-Keystore-encrypted
+secret per identity, with separate endpoint-to-key references. Import validates
+and normalizes the key in the native SSH library, accepting a transient
+passphrase when needed. Duplicate public-key fingerprints select the existing
+entry. Names, fingerprints and references are the only key data exposed to UI
+state; private keys and passphrases are never saved in UI restoration state.
+
+Existing endpoint-specific encrypted keys migrate before network configuration.
+Migration retains their original ciphertext, deduplicates identities when public
+metadata can be read, and preserves a separate entry and binding when metadata
+inspection fails. Saving the new library and removing the legacy map is atomic.
+Forgetting a server clears its binding while retaining its reusable key. Deleting
+a library key requires confirmation and clears only that key's bindings.
+
+SSH server setup offers saved keys, No key for keyless/Tailscale SSH, and adding a
+new key by paste or file import. Names and optional passphrases use separate
+fields. Imported files are bounded at 128 KiB. A new key is added to the library
+and selected in the server draft; the endpoint binding changes only on Save &
+connect. A failed server save restores the previous route and key selection.
+Adding an unassigned key or renaming one does not reconfigure/retry connections.
