@@ -28,7 +28,7 @@ class StartupTabsTest {
         val chrome=mutableStateOf(cache.present(state()))
         val ready=mutableStateOf(false)
         val session=mutableStateOf("s")
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             Box(Modifier.width(360.dp)) {
                 TerminalTabs(chrome.value.windows,"w",true,{},
                     panePrograms={w->w.blocks.map {chrome.value.programs.getValue(it.id)}},selectedPane={0},

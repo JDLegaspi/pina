@@ -16,7 +16,7 @@ class TerminalEditActionsTest {
         listOf(PanePlacement("a",0f,0f,.5f,1f),PanePlacement("b",.5f,0f,.5f,1f),PanePlacement("f",.1f,.1f,.7f,.7f,floating=true))))
     private val calls=mutableListOf<String>()
     private fun show(page: Int) {
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             TabPaneSwitcher(listOf(window.value),"w","a",mapOf("a" to ProgramIdentity.resolve(listOf("fish")),"b" to ProgramIdentity.resolve(listOf("claude")),"f" to ProgramIdentity.resolve(listOf("codex"))),
                 mapOf("b" to "Agent task","f" to "Floating task"),emptyMap(),{0},true,true,true,
                 {calls+="open-tab"},{calls+="open-pane"},{},{_,_->},{},{},{},initialPage=page,
@@ -53,7 +53,7 @@ class TerminalEditActionsTest {
     }
     @Test fun rejectedRenameKeepsTheInputAndSupportsResetToAutomatic() {
         val target=TerminalRenameTarget("w","a",false,"My pane");var accept=false;var closed=0;var value=""
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             TerminalRenameDialog(target,true,{value=it;accept}) {closed++}
         }}
         ui.onNodeWithText("Save").performClick()

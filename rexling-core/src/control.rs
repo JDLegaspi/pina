@@ -124,6 +124,9 @@ impl Control {
     pub async fn connect_forward(endpoint: Endpoint, token: Option<&str>) -> Result<Self> {
         Self::connect_revision(endpoint, token, Trace::default(), 14).await
     }
+    pub async fn connect_files(endpoint: Endpoint) -> Result<Self> {
+        Self::connect_revision(endpoint, None, Trace::default(), 16).await
+    }
     async fn connect_revision(endpoint: Endpoint, token: Option<&str>, trace: Trace, revision: u64) -> Result<Self> {
         let mut ws = endpoint.open("/api/control", CONTROL).await?;
         let platform = match std::env::consts::OS {
@@ -132,7 +135,7 @@ impl Control {
             _ => "other",
         };
         // The common control/data shapes have been checked against revisions 7 and 8.
-        let mut hello = json!({"type":"hello","api_revision":revision,"api_min_revision":7,"client":{"kind":"app","name":"rexling","platform":platform,"version":env!("CARGO_PKG_VERSION")}});
+        let mut hello = json!({"type":"hello","api_revision":revision,"api_min_revision":7,"client":{"kind":"app","name":"pina","platform":platform,"version":env!("CARGO_PKG_VERSION")}});
         if let Some(token) = token {
             hello["reconnect_token"] = json!(token);
         }

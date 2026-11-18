@@ -65,7 +65,7 @@ class SshKeysTest {
         val id=runBlocking {NetworkSettings.addKey("Selector key",key(),"").id!!}
         val selected=mutableStateOf<String?>(null)
         try {
-            ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {SshKeyEditor(selected.value) {selected.value=it}}}
+            ui.setContent {PinaTheme(true) {SshKeyEditor(selected.value) {selected.value=it}}}
             ui.onNodeWithText("No key",useUnmergedTree=true).performClick()
             ui.onNodeWithText("Selector key",useUnmergedTree=true).performClick()
             ui.runOnIdle {assertEquals(id,selected.value)}
@@ -78,7 +78,7 @@ class SshKeysTest {
     @Test fun keyLibraryCanRenameAndDeleteWithoutTouchingAnotherKey() {
         val id=runBlocking {NetworkSettings.addKey("Old name",key(),"").id!!}
         try {
-            ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {Surface(Modifier.fillMaxSize()) {SshKeysSheet({})}}}
+            ui.setContent {PinaTheme(true) {Surface(Modifier.fillMaxSize()) {SshKeysSheet({})}}}
             ui.onNodeWithText("Old name").assertIsDisplayed()
             ui.waitForIdle();Thread.sleep(300)
             val instrumentation=InstrumentationRegistry.getInstrumentation()

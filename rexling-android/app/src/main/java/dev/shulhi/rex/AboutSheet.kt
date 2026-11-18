@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -26,7 +25,7 @@ import androidx.compose.ui.unit.sp
 
 internal data class AppBuildInfo(val version: String,val number: Int,val type: String,val revision: String,val modified: Boolean) {
     val commit: String get()=revision+if(modified) " (local changes)" else ""
-    val description: String get()="Rexling $version (build $number)\n$type · $commit"
+    val description: String get()="Pina $version (build $number)\n$type · $commit"
     companion object {
         val current get()=AppBuildInfo(BuildConfig.VERSION_NAME,BuildConfig.VERSION_CODE,BuildConfig.BUILD_TYPE,BuildConfig.GIT_REVISION,BuildConfig.LOCAL_CHANGES)
         const val repository="https://github.com/shulhi/rexling"
@@ -39,7 +38,7 @@ internal data class AppBuildInfo(val version: String,val number: Int,val type: S
     val uri=LocalUriHandler.current
     SettingsDrawer("About","Close about",onClose,hazeState) {
         AboutContent(AppBuildInfo.current,onClose,onCopy={text->
-            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Rexling build",text))
+            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Pina build",text))
         },onOpen={url->
             runCatching {uri.openUri(url)}.onFailure {Toast.makeText(context,"No browser available",Toast.LENGTH_SHORT).show()}
         },showHeader=false)
@@ -53,21 +52,21 @@ internal data class AppBuildInfo(val version: String,val number: Int,val type: S
             ChromeButton(ChromeIcon.CLOSE,"Close about",onClick=onClose)
         }
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
-            Image(painterResource(R.drawable.rexlink_dinosaur),contentDescription=null,
-                modifier=Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).padding(4.dp))
+            PinaAppIcon(64.dp)
             Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.app_name),fontSize=24.sp,fontWeight=FontWeight.Bold)
-                Text(stringResource(R.string.app_subtitle),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.app_name),style=PinaType.title2.copy(fontWeight=FontWeight.Bold))
+                Text(stringResource(R.string.app_subtitle),style=PinaType.footnote,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Based on Rexling by Shulhi Sapli (Apache-2.0)",style=PinaType.footnote,color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.45f)).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().clip(PinaShapes.section).background(LocalPinaColors.current.secondaryGroupedBackground).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             BuildInfoRow("Version",info.version)
             BuildInfoRow("Build","${info.number} · ${info.type}")
             BuildInfoRow("Commit",info.commit)
         }
         OutlinedButton(onClick={onCopy(info.description)}) {ChromeSymbol(ChromeIcon.COPY,Modifier.size(16.dp));Spacer(Modifier.width(8.dp));Text("Copy build info")}
         Column {
-            TextButton(onClick={onOpen(AppBuildInfo.repository)}) {Text("Source code on GitHub")}
+            TextButton(onClick={onOpen(AppBuildInfo.repository)}) {Text("Rexling source on GitHub")}
             TextButton(onClick={onOpen("${AppBuildInfo.repository}/blob/main/LICENSE")}) {Text("Apache License 2.0")}
             TextButton(onClick={onOpen("${AppBuildInfo.repository}/blob/main/THIRD_PARTY_NOTICES.md")}) {Text("Open-source notices")}
         }
@@ -80,5 +79,12 @@ internal data class AppBuildInfo(val version: String,val number: Int,val type: S
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.Top) {
         Text(label,Modifier.width(64.dp),fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value,fontSize=13.sp,fontWeight=FontWeight.Medium)
+    }
+}
+
+@Composable private fun PinaAppIcon(size: androidx.compose.ui.unit.Dp) {
+    Box(Modifier.size(size).clip(RoundedCornerShape(size*.22f)),contentAlignment=Alignment.Center) {
+        Image(painterResource(R.drawable.ic_launcher_background),contentDescription=null,modifier=Modifier.fillMaxSize())
+        Image(painterResource(R.drawable.ic_launcher_foreground),contentDescription=null,modifier=Modifier.requiredSize(size*1.5f))
     }
 }

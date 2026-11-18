@@ -22,11 +22,8 @@ import dev.chrisbanes.haze.HazeState
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun SettingsDrawer(title: String,closeDescription: String,onClose: ()->Unit,
     hazeState: HazeState?=null,onBack: (() -> Unit)?=null,swipeToDismiss: Boolean=true,backDescription: String="Back to appearance",content: @Composable ColumnScope.()->Unit) {
-    val localHaze=remember {HazeState()}
     @Composable fun Body(modifier: Modifier=Modifier) {
-        val frost=if(swipeToDismiss) Modifier.drawerFrost(hazeState,BottomSheetDefaults.ExpandedShape)
-            else Modifier.paneFrost(hazeState ?: localHaze,BottomSheetDefaults.ExpandedShape,edge=false,opacity=.72f,blur=24.dp)
-        Column(modifier.then(frost).fillMaxWidth()
+        Column(modifier.sheetSurface().fillMaxWidth()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
             DrawerHandle()
             Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=16.dp,end=4.dp),verticalAlignment=Alignment.CenterVertically) {

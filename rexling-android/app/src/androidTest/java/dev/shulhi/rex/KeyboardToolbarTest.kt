@@ -12,7 +12,7 @@ class KeyboardToolbarTest {
     @get:Rule val ui=createComposeRule()
     @Test fun dragSortsRemovesAddsAndReplacesAtTheLimit() {
         var saved: List<ToolbarKey>?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {KeyboardToolbarSheet(ToolbarLayout.defaults,{saved=it},{})}}
+        ui.setContent {PinaTheme(false) {KeyboardToolbarSheet(ToolbarLayout.defaults,{saved=it},{})}}
         capture()
         drag("Toolbar slot 1: Escape","Toolbar slot 3: Alt")
         ui.onNodeWithContentDescription("Toolbar slot 3: Escape").assertExists()
@@ -33,7 +33,7 @@ class KeyboardToolbarTest {
     }
     @Test fun tappingAndAccessibilityCanEditWithoutDraggingAndCancelKeepsTheOrder() {
         var saved: List<ToolbarKey>?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {KeyboardToolbarSheet(ToolbarLayout.defaults,{saved=it},{})}}
+        ui.setContent {PinaTheme(false) {KeyboardToolbarSheet(ToolbarLayout.defaults,{saved=it},{})}}
         ui.onNodeWithText("Remove selected").performClick()
         ui.onNodeWithContentDescription("Available button: Paste").performClick()
         val actions=ui.onNodeWithContentDescription("Toolbar slot 7: Paste").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.CustomActions]
@@ -46,7 +46,7 @@ class KeyboardToolbarTest {
     }
     @Test fun paletteScrollingAndBoundaryFlingsNeverMoveOrDismissTheDrawer() {
         var closed=false
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {KeyboardToolbarSheet(ToolbarLayout.defaults,{}, {closed=true})}}
+        ui.setContent {PinaTheme(false) {KeyboardToolbarSheet(ToolbarLayout.defaults,{}, {closed=true})}}
         val initial=ui.onNodeWithText("Keyboard toolbar").fetchSemanticsNode().boundsInRoot.top
         val palette=ui.onNodeWithContentDescription("Available toolbar buttons")
         repeat(3) {
@@ -66,7 +66,7 @@ class KeyboardToolbarTest {
     }
     @Test fun fixedPanelKeepsInsideTapsAndStillAllowsBackAndOutsideDismissal() {
         var dismissals=0
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {KeyboardToolbarSheet(ToolbarLayout.defaults,{}, {dismissals++})}}
+        ui.setContent {PinaTheme(false) {KeyboardToolbarSheet(ToolbarLayout.defaults,{}, {dismissals++})}}
         ui.onNodeWithText("Your toolbar · 7/7").performClick()
         ui.runOnIdle {assertEquals(0,dismissals)}
         androidx.test.espresso.Espresso.pressBack()
@@ -94,7 +94,7 @@ class KeyboardToolbarTest {
     @Test fun customKeysDispatchAndKeyboardStaysAvailableWithNoSlots() {
         val layout=mutableStateOf(listOf(ToolbarKey.PASTE,ToolbarKey.ENTER,ToolbarKey.CTRL_C))
         val sent=mutableListOf<String>();var pasted=0;var keyboard=0
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             KeyboardBar(true,true,false,false,false,true,{},{},{},{},{},{sent+=it},onControlShortcut={sent+="ctrl-$it"},onPaste={pasted++},toolbarKeys=layout.value,onKeyboard={keyboard++})
         }}
         ui.onNodeWithContentDescription("Paste").performClick()

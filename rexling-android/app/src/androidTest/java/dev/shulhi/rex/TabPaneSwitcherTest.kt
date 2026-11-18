@@ -21,7 +21,7 @@ class TabPaneSwitcherTest {
     private val programs=mapOf("a" to ProgramIdentity.resolve(listOf("fish")),"b" to ProgramIdentity.resolve(listOf("claude")),"c" to ProgramIdentity.resolve(listOf("codex")),"d" to ProgramIdentity.resolve(listOf("nvim")))
     private val calls=mutableListOf<String>()
     private fun show(enabled: Boolean=true,initialPage: Int=0,empty: Boolean=false,dark: Boolean=false,selectedBlock: String="b",withoutLayout: Boolean=false) {
-        ui.setContent {RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+        ui.setContent {PinaTheme(dark) {
             TabPaneSwitcher(if(empty) emptyList() else if(withoutLayout) windows.value.map {it.copy(layout=emptyList())} else windows.value,"w1",selectedBlock,programs,
                 mapOf("b" to "Plan next steps","c" to "Review changes"),mapOf("a" to "~/Dev/rexling","b" to "~/Dev/portside"),
                 {if(it.id=="w1") 1 else 0},enabled,enabled,enabled && !empty,

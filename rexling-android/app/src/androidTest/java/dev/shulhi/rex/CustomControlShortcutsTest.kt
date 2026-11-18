@@ -40,7 +40,7 @@ class CustomControlShortcutsTest {
     }
     @Test fun recorderAddsNamedSpacePrefixAndSavesTheList() {
         var saved: List<ControlShortcut>?=null;var closed=false
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {ControlShortcutsSheet(ControlShortcutConfig.defaults,{text->
+        ui.setContent {PinaTheme(false) {ControlShortcutsSheet(ControlShortcutConfig.defaults,{text->
             runCatching {saved=ControlShortcutConfig.parse(text)}.exceptionOrNull()?.message
         },{closed=true})}}
         capture("list")
@@ -58,7 +58,7 @@ class CustomControlShortcutsTest {
     }
     @Test fun recorderUndoClearCancelAndDragReorderKeepTheRightEntries() {
         var saved: List<ControlShortcut>?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {ControlShortcutsSheet(ControlShortcutConfig.defaults.take(3),{text->
+        ui.setContent {PinaTheme(false) {ControlShortcutsSheet(ControlShortcutConfig.defaults.take(3),{text->
             runCatching {saved=ControlShortcutConfig.parse(text)}.exceptionOrNull()?.message
         },{})}}
         ui.onNodeWithContentDescription("Edit Ctrl shortcut ^C").performClick()

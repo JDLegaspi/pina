@@ -18,7 +18,7 @@ class ServerIconPickerTest {
     @get:Rule val ui=createComposeRule()
     @Test fun pickerOffersAllIconsAndChangesOnlyTheSelection() {
         val selected=mutableStateOf(ServerIcon.GLOBE)
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {ServerIconPicker(selected.value) {selected.value=it}}}
+        ui.setContent {PinaTheme(false) {ServerIconPicker(selected.value) {selected.value=it}}}
         ServerIcon.entries.forEach {icon->
             ui.onNodeWithContentDescription("Choose server icon").performClick()
             if(icon==ServerIcon.GLOBE) {
@@ -34,7 +34,7 @@ class ServerIconPickerTest {
     @Test fun editorSavesTheChosenIconWithTheExistingServerDetails() {
         val server=ServerProfile.create("Work Mac","https://work.example","work",ServerIcon.MAC_MINI)
         var saved: Triple<String,String,ServerIcon>?=null;var closed=0
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             ServerEditor(server,{closed++}) {name,url,icon->saved=Triple(name,url,icon);null}
         }}
         ui.onNodeWithContentDescription("Choose server icon").performClick()

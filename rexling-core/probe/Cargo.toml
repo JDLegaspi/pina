@@ -28,6 +28,7 @@ clap = { version = "4.6", features = ["derive", "env"] }
 crossterm = "0.29"
 futures-util = { version = "0.3", features = ["sink"] }
 percent-encoding = "2.3"
+rex-core = { package = "rexling-core", path = "..", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util", "io-std", "time", "signal", "sync"] }

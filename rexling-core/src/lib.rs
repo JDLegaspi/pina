@@ -7,6 +7,9 @@ pub mod transport;
 
 pub mod upload;
 
+pub mod files;
+pub mod skills;
+
 pub mod graphics;
 
 pub mod forward;

@@ -1,0 +1,238 @@
+{
+ "commands": [
+  {
+   "description": "Audit a screen or page for accessibility issues: contrast, labels, focus order and touch targets.",
+   "name": "a11y-audit",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Generate or refresh API reference docs from the route handlers and their types.",
+   "name": "api-docs",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Bump the app version and build number, then update every place that pins it.",
+   "name": "bump-version",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Draft a changelog entry from the commits since the last tag, grouped by user-facing change.",
+   "name": "changelog",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Review the current diff for correctness bugs, missing tests and risky changes before a PR.",
+   "name": "code-review",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Write and dry-run a database migration, with a rollback, for a schema change.",
+   "name": "db-migrate",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Update outdated dependencies one at a time, running the tests after each bump.",
+   "name": "dependency-update",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Build the current branch and deploy it to a preview environment, then post the URL.",
+   "name": "deploy-preview",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Run the end-to-end smoke suite against a running build and summarise any failures.",
+   "name": "e2e-smoke",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Extract new user-facing strings into the translation catalog and flag missing locales.",
+   "name": "i18n-extract",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Turn an incident timeline into a short write-up with impact, cause and follow-ups.",
+   "name": "incident-notes",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Run the linters and formatters and fix what they report without changing behaviour.",
+   "name": "lint-fix",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Walk a new contributor through setting up the project and running it locally.",
+   "name": "onboarding",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Profile a slow screen or endpoint against a baseline and propose the biggest win.",
+   "name": "perf-audit",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Write release notes for the next version from merged PRs, in plain language.",
+   "name": "release-notes",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Roll a deployment back to the previous release and confirm health checks pass.",
+   "name": "rollback",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Generate realistic seed data for local development and tests.",
+   "name": "seed-data",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Set up gbrain for this coding agent: install the CLI, initialise a local brain and register it.",
+   "name": "setup-gbrain",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Add or update Storybook stories for a component, covering each state.",
+   "name": "storybook",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Keep gbrain current with this repo's code and refresh the agent's search guidance.",
+   "name": "sync-gbrain",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Reproduce a reported issue, label it and suggest an owner and priority.",
+   "name": "triage-issue",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Write focused tests for a change, asserting behaviour users can observe.",
+   "name": "write-tests",
+   "plugin": null,
+   "source": "user"
+  },
+  {
+   "description": "Delete local branches whose remote branch is gone.",
+   "name": "commit-commands:clean-gone",
+   "plugin": "commit-commands",
+   "source": "plugin"
+  },
+  {
+   "description": "Create a git commit with a message that follows the repository's style.",
+   "name": "commit-commands:commit",
+   "plugin": "commit-commands",
+   "source": "plugin"
+  },
+  {
+   "description": "Commit, push and open a pull request in one step.",
+   "name": "commit-commands:commit-push-pr",
+   "plugin": "commit-commands",
+   "source": "plugin"
+  },
+  {
+   "description": "Create and maintain Code Connect files that map Figma components to code.",
+   "name": "figma:figma-code-connect",
+   "plugin": "figma",
+   "source": "plugin"
+  },
+  {
+   "description": "Create a new Figma Design, FigJam or Slides file.",
+   "name": "figma:figma-create-new-file",
+   "plugin": "figma",
+   "source": "plugin"
+  },
+  {
+   "description": "Implement a Figma design as code in the current project.",
+   "name": "figma:figma-design-to-code",
+   "plugin": "figma",
+   "source": "plugin"
+  },
+  {
+   "description": "Translate an application page or view into a Figma design built from the design system.",
+   "name": "figma:figma-generate-design",
+   "plugin": "figma",
+   "source": "plugin"
+  },
+  {
+   "description": "Build or update a design system library in Figma from a codebase.",
+   "name": "figma:figma-generate-library",
+   "plugin": "figma",
+   "source": "plugin"
+  },
+  {
+   "description": "Run Figma Plugin API scripts to create and edit nodes, variables and components.",
+   "name": "figma:figma-use",
+   "plugin": "figma",
+   "source": "plugin"
+  },
+  {
+   "description": "Use before any creative work: creating features, building components or planning anything new.",
+   "name": "superpowers:brainstorming",
+   "plugin": "superpowers",
+   "source": "plugin"
+  },
+  {
+   "description": "Use when facing two or more independent tasks that can run without shared state.",
+   "name": "superpowers:dispatching-parallel-agents",
+   "plugin": "superpowers",
+   "source": "plugin"
+  },
+  {
+   "description": "Use when executing a written implementation plan in the current session.",
+   "name": "superpowers:executing-plans",
+   "plugin": "superpowers",
+   "source": "plugin"
+  },
+  {
+   "description": "Use when completing tasks or major features, before merging, to verify the work.",
+   "name": "superpowers:requesting-code-review",
+   "plugin": "superpowers",
+   "source": "plugin"
+  },
+  {
+   "description": "Use when encountering any bug, test failure or unexpected behaviour, before proposing fixes.",
+   "name": "superpowers:systematic-debugging",
+   "plugin": "superpowers",
+   "source": "plugin"
+  },
+  {
+   "description": "Use when implementing any feature or bugfix, before writing implementation code.",
+   "name": "superpowers:test-driven-development",
+   "plugin": "superpowers",
+   "source": "plugin"
+  },
+  {
+   "description": "Use before claiming work is complete: run the verification commands and confirm the output.",
+   "name": "superpowers:verification-before-completion",
+   "plugin": "superpowers",
+   "source": "plugin"
+  },
+  {
+   "description": "Use when you have a spec or requirements for a multi-step task, before touching code.",
+   "name": "superpowers:writing-plans",
+   "plugin": "superpowers",
+   "source": "plugin"
+  }
+ ]
+}

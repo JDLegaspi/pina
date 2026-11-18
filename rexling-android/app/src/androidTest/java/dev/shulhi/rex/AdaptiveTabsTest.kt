@@ -30,7 +30,7 @@ class AdaptiveTabsTest {
     private val stacked=mutableStateOf(false)
     private val programs=listOf("codex","claude","fish","nvim").map {ProgramIdentity.resolve(listOf(it))}
     private fun show(dark: Boolean=false,programOrder: List<ProgramIdentity> = programs) {
-        ui.setContent {RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+        ui.setContent {PinaTheme(dark) {
             Box(Modifier.width(width.floatValue.dp).background(MaterialTheme.colorScheme.surface).testTag("Test dock")) {
                 TerminalTabs(List(count.intValue) {WindowItem(it.toString(),names.value[it],listOf(BlockItem("pane-$it","Terminal")))},selected.value,true,
                     onSelect={selected.value=it},panePrograms={tab->val i=tab.id.toInt();List(if(i==0 && stacked.value) 3 else 1) {offset->programOrder[(i+offset)%programOrder.size]}},selectedPane={0},

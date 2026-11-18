@@ -4,6 +4,7 @@ mod engine;
 mod updates;
 mod uploads;
 mod forwards;
+mod skills;
 use engine::Session;
 use jni::{
     JNIEnv,
@@ -147,7 +148,7 @@ pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_uploadCreate(mut env:JNI
     let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||->anyhow::Result<u64>{
         let request:String=env.get_string(&request)?.into();uploads::create(serde_json::from_str(&request)?)
     }));
-    match result {Ok(Ok(id))=>id as jlong,_=>{let _=env.throw_new("java/lang/IllegalStateException","Could not start image upload");0}}
+    match result {Ok(Ok(id))=>id as jlong,_=>{let _=env.throw_new("java/lang/IllegalStateException","Could not start upload");0}}
 }
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_uploadPoll(mut env:JNIEnv,_class:JClass,handle:jlong)->jstring {
@@ -155,6 +156,31 @@ pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_uploadPoll(mut env:JNIEn
 }
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_uploadDestroy(_env:JNIEnv,_class:JClass,handle:jlong) {uploads::destroy(handle as u64);}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_skillsCreate(mut env: JNIEnv, _class: JClass, request: JString) -> jlong {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> anyhow::Result<u64> {
+        let request: String = env.get_string(&request)?.into();
+        skills::create(serde_json::from_str(&request)?)
+    }));
+    match result {
+        Ok(Ok(id)) => id as jlong,
+        error => {
+            let message = match error {Ok(Err(e))=>e.to_string(),_=>"Could not look up skills".into()};
+            let _=env.throw_new("java/lang/IllegalStateException",message);
+            0
+        }
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_skillsPoll(mut env: JNIEnv, _class: JClass, id: jlong) -> jstring {
+    let value = std::panic::catch_unwind(||skills::poll(id as u64)).unwrap_or_else(|_|serde_json::json!({"phase":"failed","error":"Skill lookup failed"}));
+    string(&mut env,value.to_string())
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_skillsDestroy(_env: JNIEnv, _class: JClass, id: jlong) {
+    let _=std::panic::catch_unwind(||skills::destroy(id as u64));
+}
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_shulhi_rex_NativeBridge_forwardCreate(mut env: JNIEnv, _class: JClass, request: JString) -> jlong {

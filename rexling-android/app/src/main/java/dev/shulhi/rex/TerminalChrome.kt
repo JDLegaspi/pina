@@ -74,7 +74,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, ADD, KEYBOARD, HIDE_KEYBOARD, LEFT, RIGHT, UP, DOWN, TAB, CLOSE, ESCAPE, CONTROL, ALT, SHIFT, POINTER, EYE, BACKSPACE, ARROWS, ENTER, SETTINGS, PASTE, IMAGE, SERVER, REFRESH, SUN, MOON, EDIT, UNPLUG, DELETE, FLOAT, CHECK, PLAY, STOP }
+internal enum class ChromeIcon { SLASH, ATTACH, FILE, SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, ADD, KEYBOARD, HIDE_KEYBOARD, LEFT, RIGHT, UP, DOWN, TAB, CLOSE, ESCAPE, CONTROL, ALT, SHIFT, POINTER, EYE, BACKSPACE, ARROWS, ENTER, SETTINGS, PASTE, IMAGE, SERVER, REFRESH, SUN, MOON, EDIT, UNPLUG, DELETE, FLOAT, CHECK, PLAY, STOP }
+
+private val PaperclipShape=androidx.compose.ui.graphics.vector.PathParser()
+    .parsePathString("M20.5 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.85 1.85 0 0 1-2.6-2.6l7.9-7.9").toPath()
 
 @Composable internal fun ChromeSymbol(icon: ChromeIcon, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
     Canvas(modifier.size(19.dp)) {
@@ -136,6 +139,13 @@ internal enum class ChromeIcon { SPLIT, SEARCH, CHEVRON, SESSIONS, COPY, MORE, A
             }
             ChromeIcon.MORE -> { for(y in listOf(5f,12f,19f)) drawCircle(color,1.4f*u,Offset(12f*u,y*u)) }
             ChromeIcon.CHECK -> {line(5f,12f,10f,17f);line(10f,17f,20f,6f)}
+            ChromeIcon.SLASH -> line(15.5f,4f,8.5f,20f)
+            ChromeIcon.ATTACH -> drawPath(Path().apply {addPath(PaperclipShape);transform(androidx.compose.ui.graphics.Matrix().apply {scale(u,u)})},
+                color,style=Stroke(width,cap=StrokeCap.Round,join=StrokeJoin.Round))
+            ChromeIcon.FILE -> {
+                drawPath(Path().apply {moveTo(6f*u,3f*u);lineTo(14f*u,3f*u);lineTo(19f*u,8f*u);lineTo(19f*u,21f*u);lineTo(6f*u,21f*u);close()},color,style=Stroke(width,join=StrokeJoin.Round))
+                line(14f,3f,14f,8f);line(14f,8f,19f,8f)
+            }
             ChromeIcon.CLOSE -> {line(6f,6f,18f,18f);line(6f,18f,18f,6f)}
             ChromeIcon.ADD -> { line(5f,12f,19f,12f); line(12f,5f,12f,19f) }
             ChromeIcon.LEFT -> arrow(-1f,0f)
@@ -198,7 +208,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
 @Composable internal fun SessionHeader(sessions: List<SessionItem>, selectedId: String,
     connected: Boolean, enabled: Boolean,
     programs: List<ProgramIdentity>, paneIndex: Int, directory: String,
-    onSessions: ()->Unit, onSelect: (String)->Unit, onLast: ()->Unit, title: String="", working: Boolean=false, expanded: Boolean=false, serverIcons: Map<String,ServerIcon> = emptyMap(), menu: @Composable ()->Unit) {
+    onSessions: ()->Unit, onSelect: (String)->Unit, onLast: ()->Unit, title: String="", working: Boolean=false, expanded: Boolean=false, serverIcons: Map<String,ServerIcon> = emptyMap(), onBack: (()->Unit)?=null, menu: @Composable ()->Unit) {
     val program=programs.getOrNull(paneIndex) ?: ProgramIdentity.Terminal
     val titleHeight=with(LocalDensity.current) {16.sp.toDp()}
     val directoryHeight=with(LocalDensity.current) {12.sp.toDp()}
@@ -255,6 +265,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
         }
     }
     Row(Modifier.fillMaxWidth().heightIn(min=50.dp).padding(horizontal=9.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
+        onBack?.let {ChromeButton(ChromeIcon.LEFT,"Back to sessions",onClick=it)}
         if(!expanded) {
             Box(Modifier.height(45.dp).clipToBounds().semantics(mergeDescendants=true) {
                 contentDescription="Session program icon";stateDescription=if(working) "Working" else "Idle"
@@ -554,7 +565,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
 }
 
 @Composable internal fun KeyboardBar(controlled: Boolean,enabled: Boolean,control: Boolean,alt: Boolean,shift: Boolean,
-    keyboardVisible: Boolean,onControl: ()->Unit,onAlt: ()->Unit,onShift: ()->Unit,onShiftPress: ()->Unit,onShiftRelease: (Boolean)->Unit,onKey: (String)->Unit,readable: Boolean=enabled,onControlShortcut: (String)->Unit={},inputKey: String="",shortcutGesture: ControlShortcutGesture=ControlShortcutGesture.HOLD,arrowJoystickEnabled: Boolean=true,onPaste: (() ->Unit)?=null,onPrompt: ((Int)->Unit)?=null,toolbarKeys: List<ToolbarKey> = ToolbarLayout.defaults,controlItems: List<ControlShortcut> = ControlShortcutConfig.defaults,onKeyboard: ()->Unit) {
+    keyboardVisible: Boolean,onControl: ()->Unit,onAlt: ()->Unit,onShift: ()->Unit,onShiftPress: ()->Unit,onShiftRelease: (Boolean)->Unit,onKey: (String)->Unit,readable: Boolean=enabled,onControlShortcut: (String)->Unit={},inputKey: String="",shortcutGesture: ControlShortcutGesture=ControlShortcutGesture.HOLD,arrowJoystickEnabled: Boolean=true,onPaste: (() ->Unit)?=null,onPrompt: ((Int)->Unit)?=null,toolbarKeys: List<ToolbarKey> = ToolbarLayout.defaults,controlItems: List<ControlShortcut> = ControlShortcutConfig.defaults,onSlash: (()->Unit)?=null,onAttach: (()->Unit)?=null,attachEnabled: Boolean=true,onKeyboard: ()->Unit) {
     val toolbar=ToolbarLayout.normalize(toolbarKeys)
     var expanded by remember {mutableStateOf(false)}
     // The extra-key trigger lives just before Esc, outside the initial viewport.
@@ -596,6 +607,8 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
                     }
                 }
             }
+            onSlash?.let {ChromeButton(ChromeIcon.SLASH,"Commands and skills",controlled && enabled,Modifier.width(32.dp),readable=readable,onClick=it)}
+            onAttach?.let {ChromeButton(ChromeIcon.ATTACH,"Attach files",controlled && enabled && attachEnabled,Modifier.width(32.dp),readable=readable,onClick=it)}
             key(inputKey) {ChromeButton(if(keyboardVisible) ChromeIcon.HIDE_KEYBOARD else ChromeIcon.KEYBOARD,
                 if(!controlled) "Take control and show keyboard" else if(keyboardVisible) "Hide keyboard" else "Show keyboard",enabled,readable=readable,onLongClick=if(controlled && enabled) onPaste else null,onClick=onKeyboard)}
         }

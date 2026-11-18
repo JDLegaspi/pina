@@ -81,19 +81,53 @@ async fn open(endpoint: Endpoint)->Result<(Control,Value)> {
     let sessions=control.call("session.attach_all",json!({"event_scope":"session"})).await?["sessions"].clone();
     Ok((control,sessions))
 }
-async fn read(control: &mut Control,pane: &Value)->Result<Vec<Value>> {
+/// Every terminal pane, with or without reported status, so the home list can show idle shells too.
+pub fn pane_info(pane: &Value,process: &Value,status: &Value,title: &Value,pwd: &Value)->Value {
+    let source=if process["foreground"].is_object() {&process["foreground"]} else {&process["child"]};
+    json!({"session":pane["session"]["session_id"],"sessionLabel":pane["session"]["label"],"sessionOrder":pane["session"]["order"],
+        "window":pane["window"]["window_id"],"windowLabel":pane["window"]["label"],
+        "block":pane["block"]["block_id"],"blockLabel":pane["block"]["label"],"order":pane["order"],
+        "programs":super::engine::program_candidates(process,status),"foreground":plain(&process["foreground"]["name"],64),
+        "title":pane_title(&title["title"]),
+        "cwd":plain(&source["cwd"],1024),"pwd":plain(&pwd["pwd"],1024),"home":plain(&process["home"],1024)})
+}
+/// Spinner glyphs before a title would otherwise republish the home list on every animation frame.
+fn pane_title(value: &Value)->String {
+    let title=stable_title(&plain(value,256));
+    let mut chars=title.chars();
+    match (chars.next(),chars.clone().next()) {
+        (Some(c),Some(next)) if next.is_whitespace() && !c.is_alphanumeric() && !c.is_ascii_punctuation()=>chars.as_str().trim_start().to_owned(),
+        _=>title,
+    }
+}
+pub fn apply_pane_title(panes: &mut Value,session: &str,block: &str,event: &Value)->bool {
+    let title=json!(pane_title(&event["title"]));
+    let Some(pane)=panes.as_array_mut().into_iter().flatten().find(|p|p["session"]["session_id"]==session && p["block"]["block_id"]==block) else {return false;};
+    if !pane["info"].is_object() || pane["info"]["title"]==title {return false;}
+    pane["info"]["title"]=title;true
+}
+pub fn pane_list(panes: &Value)->Value {
+    Value::Array(panes.as_array().into_iter().flatten().filter(|p|p["info"].is_object()).map(|p|p["info"].clone()).collect())
+}
+async fn read(control: &mut Control,pane: &Value)->Result<Option<(Vec<Value>,Value)>> {
     let session=&pane["session"];let window=&pane["window"];let block=&pane["block"];
     let sid=session["session_id"].as_str().context("missing session")?;
     let bid=block["block_id"].as_str().context("missing block")?;
     let status=match control.terminal(sid,bid,"program_status",json!({})).await {
         Ok(v)=>v,
-        Err(e) if e.downcast_ref::<rex_core::control::RpcError>().is_some_and(|e|matches!(e.code.as_str(),"session_not_found"|"not_found"))=>return Ok(Vec::new()),
+        Err(e) if e.downcast_ref::<rex_core::control::RpcError>().is_some_and(|e|matches!(e.code.as_str(),"session_not_found"|"not_found"))=>return Ok(None),
         Err(e)=>return Err(e),
     };
-    if status["records"].as_array().is_none_or(Vec::is_empty) {return Ok(Vec::new());}
-    let process=control.terminal(sid,bid,"process",json!({})).await?;
+    // A missing process only degrades the pane row; it must not mark status scans partial.
+    let process=match control.terminal(sid,bid,"process",json!({})).await {
+        Ok(v)=>v,
+        Err(_) if status["records"].as_array().is_none_or(Vec::is_empty)=>Value::Null,
+        Err(e)=>return Err(e),
+    };
     let title=control.terminal(sid,bid,"title",json!({})).await.unwrap_or(Value::Null);
-    Ok(records(&process,&status,&title,session,window,block))
+    let pwd=control.terminal(sid,bid,"pwd",json!({})).await.unwrap_or(Value::Null);
+    let info=pane_info(pane,&process,&status,&title,&pwd);
+    Ok(Some((records(&process,&status,&title,session,window,block),info)))
 }
 pub async fn scan(endpoint: Endpoint)->Result<Value> {
     tokio::time::timeout(Duration::from_secs(15),async {
@@ -108,10 +142,14 @@ pub async fn scan(endpoint: Endpoint)->Result<Value> {
                 for block in window["layers"].as_array().into_iter().flatten().flat_map(|l|l["blocks"].as_array().into_iter().flatten()) {
                     if block["creator_name"]!="com.superlogical.terminal" {continue;}
                     if panes.len()>=256 || items.len()>=1024 || tokio::time::Instant::now()>deadline {partial=true;break 'sessions;}
-                    let pane=json!({"session":{"session_id":sid,"label":plain(&session["label"],256)},
+                    let mut pane=json!({"session":{"session_id":sid,"label":plain(&session["label"],256),"order":index},
                         "window":{"window_id":window["window_id"],"label":plain(&window["label"],256)},
-                        "block":{"block_id":block["block_id"],"label":plain(&block["label"],256)}});
-                    match read(&mut control,&pane).await {Ok(records)=>items.extend(records.into_iter().take(1024-items.len())),Err(_)=>partial=true}
+                        "block":{"block_id":block["block_id"],"label":plain(&block["label"],256)},"order":panes.len()});
+                    match read(&mut control,&pane).await {
+                        Ok(Some((records,info)))=>{items.extend(records.into_iter().take(1024-items.len()));pane["info"]=info;},
+                        Ok(None)=>{},
+                        Err(_)=>partial=true,
+                    }
                     panes.push(pane);
                 }
             }
@@ -122,16 +160,20 @@ pub async fn scan(endpoint: Endpoint)->Result<Value> {
 }
 pub async fn refresh(endpoint: Endpoint,panes: Vec<Value>)->Result<Value> {
     tokio::time::timeout(Duration::from_secs(15),async {
-        let (mut control,_)=open(endpoint).await?;let mut items=Vec::new();let mut replaced=Vec::new();let mut partial=false;
-        for pane in panes.into_iter().take(256) {
+        let (mut control,_)=open(endpoint).await?;let mut items=Vec::new();let mut replaced=Vec::new();let mut refreshed=Vec::new();let mut partial=false;
+        for mut pane in panes.into_iter().take(256) {
             match read(&mut control,&pane).await {
-                Ok(records)=>{replaced.push(pane_key(pane["session"]["session_id"].as_str().unwrap_or(""),pane["block"]["block_id"].as_str().unwrap_or("")));items.extend(records.into_iter().take(1024-items.len()));},
+                Ok(result)=>{
+                    replaced.push(pane_key(pane["session"]["session_id"].as_str().unwrap_or(""),pane["block"]["block_id"].as_str().unwrap_or("")));
+                    let (records,info)=result.unwrap_or((Vec::new(),Value::Null));
+                    items.extend(records.into_iter().take(1024-items.len()));pane["info"]=info;refreshed.push(pane);
+                },
                 Err(_)=>partial=true,
             }
             if items.len()>=1024 {partial=true;break;}
         }
         let _=control.close().await;
-        Ok::<_,anyhow::Error>(json!({"full":false,"items":items,"replace":replaced,"partial":partial}))
+        Ok::<_,anyhow::Error>(json!({"full":false,"items":items,"replace":replaced,"panes":refreshed,"partial":partial}))
     }).await.context("Activity refresh timed out")?
 }
 #[cfg(test)] mod tests {
@@ -215,4 +257,34 @@ pub async fn refresh(endpoint: Endpoint,panes: Vec<Value>)->Result<Value> {
         assert_eq!(claude[0]["codexTitleEligible"],false);
     }
 
+    #[test] fn every_pane_reports_identity_title_and_directory_without_status() {
+        let pane=json!({"session":{"session_id":"s","label":"atlas","order":2},"window":{"window_id":"w","label":"Tab"},"block":{"block_id":"b","label":""},"order":5});
+        let process=json!({"home":"/Users/dev","foreground":{"pid":9,"name":"zsh","cwd":"/Users/dev/code/atlas","argv0":"-zsh"}});
+        let info=pane_info(&pane,&process,&json!({"records":[]}),&json!({"title":"⠋ atlas"}),&json!({"pwd":"file:///Users/dev/x"}));
+        assert_eq!(info["session"],"s");assert_eq!(info["sessionLabel"],"atlas");assert_eq!(info["sessionOrder"],2);assert_eq!(info["order"],5);
+        assert_eq!(info["foreground"],"zsh");assert_eq!(info["title"],"atlas");assert_eq!(info["cwd"],"/Users/dev/code/atlas");
+        assert_eq!(info["home"],"/Users/dev");assert_eq!(info["pwd"],"file:///Users/dev/x");assert_eq!(info["programs"][0],"-zsh");
+        let child=pane_info(&pane,&json!({"child":{"cwd":"/tmp","name":"login"}}),&json!({}),&json!({}),&json!({}));
+        assert_eq!(child["cwd"],"/tmp");assert_eq!(child["title"],"");
+    }
+    #[test] fn pane_titles_follow_events_but_ignore_spinner_frames() {
+        let mut panes=json!([{"session":{"session_id":"s"},"block":{"block_id":"b"},"info":{"title":"Claude Code"}},{"session":{"session_id":"s"},"block":{"block_id":"gone"}}]);
+        assert!(!apply_pane_title(&mut panes,"s","b",&json!({"title":"✳ Claude Code"})));
+        assert!(!apply_pane_title(&mut panes,"s","b",&json!({"title":"⠂ Claude Code"})));
+        assert!(apply_pane_title(&mut panes,"s","b",&json!({"title":"react-native"})));
+        assert_eq!(panes[0]["info"]["title"],"react-native");
+        assert!(!apply_pane_title(&mut panes,"s","gone",&json!({"title":"x"})));
+        assert!(!apply_pane_title(&mut panes,"other","b",&json!({"title":"x"})));
+        assert_eq!(pane_list(&panes),json!([{"title":"react-native"}]));
+        assert!(apply_pane_title(&mut panes,"s","b",&json!({"title":"[!] Action Required | Task"})));
+        assert_eq!(panes[0]["info"]["title"],"[!] Action Required | Task");
+    }
+    #[test] #[ignore] fn live_home_scan_dump() {
+        let server=std::env::var("REX_HOME_SCAN_SERVER").expect("REX_HOME_SCAN_SERVER");
+        let runtime=tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let value=runtime.block_on(scan(Endpoint::new(&server,Duration::from_secs(10)).unwrap())).unwrap();
+        let output=json!({"panes":pane_list(&value["panes"]),"items":value["items"],"partial":value["partial"]});
+        let text=serde_json::to_string_pretty(&output).unwrap();
+        match std::env::var("REX_HOME_SCAN_OUTPUT") {Ok(path)=>std::fs::write(path,text).unwrap(),Err(_)=>println!("{text}")}
+    }
 }

@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
         (112+count.coerceIn(1,7)*72+groups.coerceAtMost(5)*24+sources.count {it.error.isNotBlank() || it.partial}*32).dp.coerceIn(208.dp,620.dp)
     }
     val scheme=MaterialTheme.colorScheme
-    val drawerSurface=Modifier.drawerFrost(hazeState,BottomSheetDefaults.ExpandedShape)
+    val drawerSurface=Modifier.sheetSurface()
     ModalBottomSheet(onDismissRequest=onClose,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,tonalElevation=0.dp,
         dragHandle=null,contentWindowInsets={WindowInsets(0,0,0,0)}) {
         Column(drawerSurface.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {

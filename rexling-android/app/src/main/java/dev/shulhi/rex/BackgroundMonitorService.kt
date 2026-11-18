@@ -134,15 +134,27 @@ class BackgroundMonitorService: Service() {
         if(key !in posted && posted.size>=32) cancel(posted.keys.first())
         val uri=destinations.issue(AlertDestination(profile.id,profile.endpoint,record.session,record.block,record.attentionKey,record.attentionVersion))
         val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java).setData(uri).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val title="${record.stateLabel} · ${record.label.ifBlank {record.program.label}}"
-        val text=listOf(profile.label,record.sessionLabel.ifBlank {record.session}).joinToString(" · ")
-        val public=Notification.Builder(this,BackgroundAlerts.ATTENTION_CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(if(record.state==ActivityState.DONE) "Rexling task finished" else "Rexling needs your attention").build()
+        val title=AlertCopy.title(record)
+        val text=AlertCopy.text(record)
+        val group=group(profile,record)
+        val public=Notification.Builder(this,BackgroundAlerts.ATTENTION_CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(if(record.state==ActivityState.DONE) "Pina task finished" else "Pina needs your attention").build()
         val notification=Notification.Builder(this,BackgroundAlerts.ATTENTION_CHANNEL).setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title).setContentText(text).setStyle(Notification.BigTextStyle().bigText(listOf(text,record.message).filter {it.isNotBlank()}.joinToString("\n")))
+            .setContentTitle(title).setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)).setSubText(profile.label).setGroup(group)
             .setContentIntent(open).setAutoCancel(true).setCategory(Notification.CATEGORY_MESSAGE).setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(public).build()
         notifications.notify(key,ATTENTION_ID,notification);posted[key]=profile to record
+        val summary=Notification.Builder(this,BackgroundAlerts.ATTENTION_CHANNEL).setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(AlertCopy.session(record)).setSubText(profile.label).setGroup(group).setGroupSummary(true).setAutoCancel(true)
+            .setGroupAlertBehavior(Notification.GROUP_ALERT_CHILDREN).setVisibility(Notification.VISIBILITY_PRIVATE).setPublicVersion(public).build()
+        notifications.notify(group,SUMMARY_ID,summary)
     }
-    private fun cancel(key: String) {notifications.cancel(key,ATTENTION_ID);posted.remove(key)}
+    private fun group(profile: ServerProfile,record: ActivityRecord)=listOf("session",profile.id,profile.endpoint,record.session).joinToString("") {"${it.length}:$it"}
+    private fun cancel(key: String) {
+        val target=posted.remove(key);notifications.cancel(key,ATTENTION_ID)
+        if(target!=null) {
+            val group=group(target.first,target.second)
+            if(posted.values.none {group(it.first,it.second)==group}) notifications.cancel(group,SUMMARY_ID)
+        }
+    }
     private fun clearAlerts() {posted.keys.toList().forEach(::cancel)}
     private fun cancelServer(profile: ServerProfile) {posted.filterValues {it.first.id==profile.id}.keys.toList().forEach(::cancel)}
     private fun cancelSeen() {posted.toMap().forEach {(key,target)->if(seen(target.first,target.second)) cancel(key)}}
@@ -153,9 +165,9 @@ class BackgroundMonitorService: Service() {
         if(lastOngoing!=title) {lastOngoing=title;notifications.notify(ONGOING_ID,ongoing(title))}
     }
     private fun ongoing(title: String): Notification {
-        val open=PendingIntent.getActivity(this,1,Intent(this,MainActivity::class.java).setAction("dev.shulhi.rex.OPEN_MONITOR").addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val open=PendingIntent.getActivity(this,1,Intent(this,MainActivity::class.java).setAction("dev.jdlegaspi.pina.OPEN_MONITOR").addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val stop=PendingIntent.getService(this,2,Intent(this,BackgroundMonitorService::class.java).setAction(STOP),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return Notification.Builder(this,BackgroundAlerts.MONITOR_CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Rexling · $title")
+        return Notification.Builder(this,BackgroundAlerts.MONITOR_CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Pina · $title")
             .setContentText("Task completions and attention alerts").setContentIntent(open).setOngoing(true).setShowWhen(false).setCategory(Notification.CATEGORY_SERVICE)
             .addAction(Notification.Action.Builder(null,"Stop",stop).build()).build()
     }
@@ -165,5 +177,5 @@ class BackgroundMonitorService: Service() {
         monitors.clear();scope.cancel();clearAlerts();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
     }
     override fun onBind(intent: Intent?): IBinder?=null
-    companion object {const val STOP="dev.shulhi.rex.STOP_MONITOR";const val ONGOING_ID=7100;const val ATTENTION_ID=7101}
+    companion object {const val STOP="dev.jdlegaspi.pina.STOP_MONITOR";const val ONGOING_ID=7100;const val ATTENTION_ID=7101;const val SUMMARY_ID=7102}
 }

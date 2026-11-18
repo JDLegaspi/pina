@@ -29,7 +29,7 @@ class SessionSwitcherTest {
     }
     @Test fun compactDrawerFiltersAcrossServersAndNavigatesWithoutDuplicateStrip() {
         var selected="";var closed=0
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             SessionSwitcher(targets,targets[0].key,targets[1].key,true,"","",{},{_,_->true},{selected=it},{closed++},{})
         }}
         ui.onNodeWithContentDescription("Session strip").assertDoesNotExist()
@@ -47,7 +47,7 @@ class SessionSwitcherTest {
     }
     @Test fun newSessionAndSessionActionsRemainSeparateFromSelection() {
         var created=0;var selected=0;var renamed=""
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             SessionSwitcher(targets,targets[0].key,targets[1].key,true,"","",{},{_,name->renamed=name;true},{selected++},{},{created++})
         }}
         capture("sessions-compact-light.png")
@@ -60,7 +60,7 @@ class SessionSwitcherTest {
     }
     @Test fun emptyDrawerStillOffersNewSession() {
         var created=0
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             SessionSwitcher(emptyList(),"","",true,"","",{},{_,_->false},{},{},{created++})
         }}
         ui.onNodeWithText("No sessions yet").assertIsDisplayed()

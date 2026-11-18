@@ -41,6 +41,7 @@ pub struct WireBase {
     revision: u64,
     metadata: String,
     activity: Arc<serde_json::Value>,
+    panes: Arc<serde_json::Value>,
     key: String,
     frame: Option<Arc<Frame>>,
 }
@@ -225,11 +226,15 @@ pub fn encode(state: &mut Shared, after: u64) -> Vec<u8> {
         .take(32)
         .collect();
     let activity_changed = reset || !Arc::ptr_eq(&base.activity, &state.activity);
-    if reset || base.metadata != state.json || activity_changed || !previews.is_empty() {
+    let panes_changed = reset || !Arc::ptr_eq(&base.panes, &state.panes);
+    if reset || base.metadata != state.json || activity_changed || panes_changed || !previews.is_empty() {
         let mut metadata: serde_json::Value =
             serde_json::from_str(&state.json).expect("internal metadata JSON");
         if activity_changed {
             metadata["activity"] = state.activity.as_ref().clone();
+        }
+        if panes_changed {
+            metadata["panes"] = state.panes.as_ref().clone();
         }
         text(&mut out, &metadata.to_string());
     } else {
@@ -263,6 +268,7 @@ pub fn encode(state: &mut Shared, after: u64) -> Vec<u8> {
         revision: state.revision,
         metadata: state.json.clone(),
         activity: state.activity.clone(),
+        panes: state.panes.clone(),
         key: state.key.clone(),
         frame: state.frame.clone(),
     };
@@ -351,6 +357,7 @@ mod wire_tests {
             key: "a".into(),
             wire: WireBase::default(),
             activity: Arc::default(),
+            panes: Arc::default(),
         };
         let full = encode(&mut state, 0);
         let metadata_len = u32::from_le_bytes(full[12..16].try_into().unwrap()) as usize;
@@ -404,6 +411,7 @@ mod wire_tests {
             key: "a".into(),
             wire: WireBase::default(),
             activity: Arc::default(),
+            panes: Arc::default(),
         };
         let full = encode(&mut state, 0);
         assert_eq!(&full[..4], b"RXT7");
@@ -440,6 +448,7 @@ mod wire_tests {
             revision: 1,
             json: "{}".into(),
             activity: Arc::new(serde_json::json!([{"title":"Task"}])),
+            panes: Arc::default(),
             pending_previews: BTreeMap::new(),
             frame: None,
             key: "a".into(),
@@ -458,6 +467,29 @@ mod wire_tests {
         assert!(metadata(&encode(&mut state, 2))["activity"].is_null());
         state.revision = 4;
         assert!(metadata(&encode(&mut state, 1))["activity"].is_null());
+    }
+
+    #[test]
+    fn pane_list_is_sent_only_when_its_snapshot_changes() {
+        let panes = Arc::new(serde_json::json!([{"block":"b","title":"zsh"}]));
+        let mut state = Shared {
+            revision: 1, json: "{}".into(), activity: Arc::default(), panes: panes.clone(),
+            pending_previews: BTreeMap::new(), frame: None, key: "a".into(), wire: WireBase::default(),
+        };
+        let metadata = |packet: &[u8]| -> serde_json::Value {
+            let n = u32::from_le_bytes(packet[12..16].try_into().unwrap()) as usize;
+            if n == 0 { return serde_json::Value::Null; }
+            serde_json::from_slice(&packet[16..16 + n]).unwrap()
+        };
+        assert_eq!(metadata(&encode(&mut state, 0))["panes"][0]["title"], "zsh");
+        state.revision = 2;
+        assert!(metadata(&encode(&mut state, 1)).is_null());
+        state.revision = 3;
+        state.json = "{\"phase\":\"connected\"}".into();
+        assert!(metadata(&encode(&mut state, 2)).get("panes").is_none());
+        state.revision = 4;
+        state.panes = Arc::new(serde_json::json!([{"block":"b","title":"vim"}]));
+        assert_eq!(metadata(&encode(&mut state, 3))["panes"][0]["title"], "vim");
     }
     fn scrolled(offset: u64) -> Frame {
         // Rows show scrollback line numbers: row y shows line offset+y.
@@ -488,7 +520,7 @@ mod wire_tests {
     fn scrolling_sends_a_shift_and_only_the_new_rows() {
         let mut state = Shared {
             revision: 1, json: "{}".into(), pending_previews: BTreeMap::new(),
-            frame: Some(Arc::new(scrolled(100))), key: "a".into(), wire: WireBase::default(), activity: Arc::default(),
+            frame: Some(Arc::new(scrolled(100))), key: "a".into(), wire: WireBase::default(), activity: Arc::default(), panes: Arc::default(),
         };
         let full = encode(&mut state, 0);
         assert_eq!(shift_and_rows(&full), (0, 50));
@@ -526,6 +558,7 @@ mod graphics_tests {
             revision: 1,
             json: r#"{"phase":"preview","selectedBlock":"image"}"#.into(),
             activity: Arc::default(),
+            panes: Arc::default(),
             pending_previews: BTreeMap::new(),
             frame: Some(frame.clone()),
             key: "image".into(),

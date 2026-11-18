@@ -21,10 +21,11 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
     internal var activitySources by mutableStateOf<List<ActivitySource>>(emptyList())
         private set
     internal fun showActivity(open: Boolean) {
-        if(open) activeClient.cancelKeyRepeats()
-        activityVisible=open;connections.values.forEach {it.activity(open)};updateActivity()
+        if(open) {activeClient.cancelKeyRepeats();refreshActivity()}
+        activityVisible=open;updateActivity()
     }
-    internal fun refreshActivity() {connections.values.forEach {it.activity(activityVisible)}}
+    /** Activity stays open on every connection: the home list and banners always need it. */
+    internal fun refreshActivity() {connections.values.forEach {it.activity(true)}}
     internal var attentionCount by mutableIntStateOf(0)
         private set
     internal var networkAvailable by mutableStateOf<Boolean?>(null)
@@ -49,6 +50,33 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
             if(state.phase in listOf("disconnected","preview")) null else ActivitySource(server,state.connected,state.activityLoading,
                 if(state.connected) state.activityError else "Connection interrupted",state.activityPartial,state.activity,state.activity.filter {connections[server.id]?.isActivitySeen(it)==true}.map {it.key}.toSet())
         }}
+        val panes=servers.flatMap {server->connections[server.id]?.state?.value?.takeIf {it.connected}?.let {AgentSessions.panes(server,it.panes,it.activity)}.orEmpty()}
+        if(panes!=agentPanes) agentPanes=panes
+        val chrome=HomeChrome(servers.isNotEmpty(),activitySources.any {it.connected},activitySources.any {it.connected && it.loading},
+            serverStatuses.values.firstOrNull {it.error.isNotBlank()}?.error.orEmpty())
+        if(chrome!=homeChrome) homeChrome=chrome
+        observeBanners()
+    }
+    private val bannerLedger=AttentionLedger()
+    private var bannerQuiet=emptySet<String>()
+    private var bannerSerial=0L
+    internal var banner by mutableStateOf<AttentionBanner?>(null)
+    private fun observeBanners() {
+        val selected=connections[activeServerId]?.state?.value
+        activitySources.filter {it.connected}.forEach {source->
+            val client=connections[source.server.id] ?: return@forEach
+            val complete=!source.loading && !source.partial && source.error.isBlank()
+            val quiet=!foreground || homeVisible || source.server.id in bannerQuiet
+            val alerts=bannerLedger.deliveries(source.server,source.items,{record->when {
+                quiet->AlertSurface.HOME
+                source.server.id==activeServerId && record.session==selected?.selectedSession && record.block==selected.selectedBlock->AlertSurface.SAME_PANE
+                else->AlertSurface.OTHER_PANE
+            }},complete,client::isActivitySeen)
+            if(complete && foreground) bannerQuiet=bannerQuiet-source.server.id
+            alerts.lastOrNull {it.delivery==AlertDelivery.BANNER}?.record?.let {record->
+                banner=AttentionBanner.of(++bannerSerial,source.server,record)
+            }
+        }
     }
     internal fun markActivitySeen(target: ActivityTarget) {
         val client=connections[target.server.id] ?: return
@@ -60,26 +88,67 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         activitySources.filter {it.connected}.forEach {source->connections[source.server.id]?.markActivitySeen(source.items)};updateActivity()
     }
     internal fun openActivity(target: ActivityTarget) {
-        val profile=servers.firstOrNull {it.id==target.server.id && it.endpoint==target.server.endpoint} ?: return
-        val source=activitySources.firstOrNull {it.server.id==profile.id && it.connected} ?: return
+        val source=activitySources.firstOrNull {it.server.id==target.server.id && it.connected} ?: return
         val record=source.items.firstOrNull {it.key==target.record.key} ?: return
-        markActivitySeen(target);rememberLastSession();connectServer(profile.id);activeClient.openActivity(record.session,record.block);showActivity(false)
+        markActivitySeen(target);openPane(PaneTarget(target.server,record.session,record.block))
     }
+    internal fun openPane(target: PaneTarget) {
+        val profile=servers.firstOrNull {it.id==target.server.id && it.endpoint==target.server.endpoint} ?: return
+        if(activitySources.none {it.server.id==profile.id && it.connected}) return
+        rememberLastSession();enterWorkspace();connectServer(profile.id)
+        if(banner?.target==target) banner=null
+        activeClient.openActivity(target.session,target.block);showActivity(false)
+    }
+    internal var homeVisible by mutableStateOf(true)
+        private set
+    private fun enterWorkspace() {if(homeVisible) {homeVisible=false;activeClient.visible=true}}
+    internal fun showHome() {
+        if(homeVisible) return
+        rememberLastSession();activeClient.releaseControl()
+        homeVisible=true;activeClient.visible=false;banner=null
+        refreshActivity();updateActivity()
+    }
+    internal fun createSession(label: String): Boolean {
+        val wasHome=homeVisible
+        enterWorkspace()
+        val created=activeClient.createSession(label)
+        if(!created && wasHome) showHome()
+        return created
+    }
+    internal var agentPanes by mutableStateOf<List<AgentPane>>(emptyList())
+        private set
+    internal var homeChrome by mutableStateOf(HomeChrome(hasServers=false,connected=false,loading=false))
+        private set
     private val preferences=application.getSharedPreferences(preferenceName,0)
+    internal var sessionsLayout by mutableStateOf(runCatching {SessionsLayout.valueOf(preferences.getString("sessions_layout","STATUS")!!)}.getOrDefault(SessionsLayout.STATUS))
+        private set
+    internal fun changeSessionsLayout(value: SessionsLayout) {sessionsLayout=value;preferences.edit {putString("sessions_layout",value.name)}}
+    internal var notificationPromptPending by mutableStateOf(!preferences.getBoolean(BackgroundAlerts.PROMPTED,false))
+        private set
+    internal fun finishNotificationPrompt(granted: Boolean) {
+        notificationPromptPending=false;preferences.edit {putBoolean(BackgroundAlerts.PROMPTED,true)}
+        if(granted && BackgroundAlerts.allowed(getApplication())) setBackgroundAlerts(true)
+    }
     private var serverSwitchSerial=0L
-    internal var pendingImageTarget: ImageTarget?=null
-    internal val images=ImageUploads(application,viewModelScope)
-    internal fun imageTarget(): ImageTarget? {
+    internal var pendingUploadTarget: UploadTarget?=null
+    internal val uploads=FileUploads(application,viewModelScope)
+    internal fun uploadTarget(): UploadTarget? {
         val client=activeClient;val state=client.state.value
         if(!foreground || !state.connected || !state.controlled || state.creating || client.navigationRequest.pending || state.selectedBlock.isBlank()) return null
         val program=state.programs[state.selectedBlock] ?: ProgramIdentity.Terminal
-        return ImageTarget(activeServerId,activeServer.endpoint,state.selectedSession,state.selectedBlock,client.selectionVersion,serverSwitchSerial,program.kind,"${program.title} · ${activeServer.label}")
+        return UploadTarget(activeServerId,activeServer.endpoint,state.selectedSession,state.selectedBlock,client.selectionVersion,serverSwitchSerial,program.kind,"${program.title} · ${activeServer.label}")
     }
-    internal fun attachImage(uri: android.net.Uri,target: ImageTarget?,onCopied: ()->Unit={}): Boolean {
-        if(target==null) {onCopied();images.notice="Take control of a pane before attaching an image.";return false}
+    internal fun attachFiles(uris: List<android.net.Uri>,target: UploadTarget?,onCopied: ()->Unit={}): Boolean {
+        if(target==null) {onCopied();uploads.notice="Take control of a pane before attaching files.";return false}
         val profile=servers.firstOrNull {it.id==target.server && it.endpoint==target.endpoint}
-        if(profile==null) {onCopied();images.notice="The original Rex server is no longer available.";return false}
-        return images.start(uri,target,onCopied)
+        if(profile==null) {onCopied();uploads.notice="The original Rex server is no longer available.";return false}
+        return uploads.start(uris,target,onCopied)
+    }
+    internal val slashCommands=SlashCommandCatalog(application.getSharedPreferences(SlashCommandCatalog.PREFERENCES,0),viewModelScope)
+    internal fun slashTarget(): SlashTarget? {
+        val state=activeClient.state.value
+        if(!state.connected || state.selectedBlock.isBlank() || state.selectedSession.isBlank()) return null
+        return SlashTarget(activeServerId,activeServer.endpoint,state.selectedSession,state.selectedBlock,state.directories[state.selectedBlock].orEmpty())
     }
     internal var experimentalCodexAttention by mutableStateOf(preferences.getBoolean(CodexAttentionPolicy.ENABLED,false))
         private set
@@ -101,7 +170,7 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
     internal fun openAlert(target: AlertDestination) {
         val profile=servers.firstOrNull {it.id==target.serverId && it.endpoint==target.endpoint}
         if(profile==null) {notificationNotice="That server is no longer saved.";return}
-        pendingAlert=target;connectServer(profile.id);tryOpenAlert()
+        pendingAlert=target;enterWorkspace();connectServer(profile.id);tryOpenAlert()
     }
     private fun tryOpenAlert() {
         val target=pendingAlert ?: return
@@ -111,7 +180,7 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         pendingAlert=null
         if(state.sessions.none {it.id==target.session}) {notificationNotice="That session is no longer available.";return}
         client.markAttentionSeen(target.attentionKey,target.attentionVersion)
-        client.openActivity(target.session,target.block);showActivity(false)
+        enterWorkspace();client.openActivity(target.session,target.block);showActivity(false)
     }
     internal val themes by lazy {ThemeCatalog.load(application)}
     private var darkTheme by mutableStateOf(preferences.getString("dark_theme","rexlink-default-dark").orEmpty())
@@ -231,8 +300,8 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
 
     private fun connection(profile: ServerProfile): RexConnection = connections.getOrPut(profile.id) {
         RexConnection(getApplication(),viewModelScope,profile.endpoint,preferences).also {client->
-            client.visible=profile.id==activeServerId
-            if(activityVisible) client.activity(true)
+            client.visible=profile.id==activeServerId && !homeVisible
+            client.activity(true)
             palette?.let(client::updateTerminalTheme)
             if(!foreground) client.pause()
             observers[profile.id]=viewModelScope.launch {
@@ -318,7 +387,7 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         if(select && activeServerId!=id) {
             rememberLastSession();serverSwitchSerial++
             activeClient.releaseControl();activeClient.visible=false
-            client.visible=true;activeServerId=id;activeClient=client
+            client.visible=!homeVisible;activeServerId=id;activeClient=client
         }
         desired=desired+id;persist()
         if(client.state.value.phase in listOf("disconnected","error","preview")) client.connect(profile.endpoint)
@@ -345,14 +414,14 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         val old=servers.firstOrNull {it.id==profile.id}
         if(old!=null && old.endpoint!=profile.endpoint) {
             PortForwards.forgetServer(getApplication(),old.id)
-            images.forget(old.id)
+            uploads.forget(old.id)
             connections.remove(old.id)?.let {it.releaseControl();it.disconnect();it.close()}
             observers.remove(old.id)?.cancel();serverStatuses=serverStatuses-old.id
         }
         servers=if(old==null) servers+profile else servers.map {if(it.id==profile.id) profile else it}
         persist()
         val client=connection(profile)
-        if(activeServerId==profile.id) {activeClient=client;client.visible=true}
+        if(activeServerId==profile.id) {activeClient=client;client.visible=!homeVisible}
         connectServer(profile.id)
         updateActivity()
     }.exceptionOrNull()?.message
@@ -364,14 +433,14 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
     fun forgetServer(id: String) {
         PortForwards.forgetServer(getApplication(),id)
         servers.firstOrNull {it.id==id}?.let {profile->NetworkSettings.forget(profile.endpoint,servers.filter {it.id!=id}.map {it.endpoint})}
-        images.forget(id)
+        uploads.forget(id)
         if(activeServerId==id) serverSwitchSerial++
         disconnectServer(id)
         observers.remove(id)?.cancel();connections.remove(id)?.close()
         servers=servers.filterNot {it.id==id};serverStatuses=serverStatuses-id
         if(activeServerId==id) {
             activeServerId=servers.firstOrNull()?.id.orEmpty()
-            activeClient=connection(activeServer);activeClient.visible=true
+            activeClient=connection(activeServer);activeClient.visible=!homeVisible
         }
         persist()
     }
@@ -381,7 +450,7 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
     }
     fun updateTerminalTheme(value: TerminalPalette) {palette=value;connections.values.forEach {it.updateTerminalTheme(value)}}
     fun changeAppearance(value: Appearance) {appearance=value;preferences.edit {putString("appearance",value.name)}}
-    fun pause() {foreground=false;updateActivity();networkJob?.cancel();networkMonitor.stop();connections.values.forEach {it.pause()}}
+    fun pause() {foreground=false;bannerQuiet=servers.map {it.id}.toSet();banner=null;updateActivity();networkJob?.cancel();networkMonitor.stop();connections.values.forEach {it.pause()}}
     fun resume() {foreground=true;networkMonitor.start();connections.values.forEach {it.resume()};tryOpenAlert();BackgroundAlerts.reconcile(getApplication())}
-    override fun onCleared() {images.close();preferences.unregisterOnSharedPreferenceChangeListener(alertsListener);networkJob?.cancel();networkMonitor.stop();observers.values.forEach {it.cancel()};connections.values.forEach {it.close()}}
+    override fun onCleared() {uploads.close();slashCommands.close();preferences.unregisterOnSharedPreferenceChangeListener(alertsListener);networkJob?.cancel();networkMonitor.stop();observers.values.forEach {it.cancel()};connections.values.forEach {it.close()}}
 }

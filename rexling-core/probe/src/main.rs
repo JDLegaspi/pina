@@ -99,6 +99,11 @@ enum Command {
     },
     /// Create an isolated session, test input/resize/stream/resume, then destroy only it.
     SelfTest,
+    /// List the Claude Code slash commands defined by files on the terminal's host. Read-only.
+    Skills {
+        session: String,
+        block: String,
+    },
 }
 
 fn print_json(mut value: Value) -> Result<()> {
@@ -123,6 +128,9 @@ fn new_output(path: &PathBuf) -> Result<std::fs::File> {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     let server = cli.server.context("pass --server URL or set REX_SERVER")?;
+    if let Command::Skills { session, block } = &cli.command {
+        return skills(&server, cli.timeout, session, block).await;
+    }
     let endpoint = Endpoint::new(&server, Duration::from_secs(cli.timeout))?;
     let trace = cli
         .trace
@@ -275,8 +283,25 @@ async fn run(command: Command, endpoint: &Endpoint, c: &mut Control, trace: Trac
             output,
         } => attach(endpoint, c, trace, &session, &block, &output).await?,
         Command::SelfTest => self_test(endpoint, c, trace).await?,
+        Command::Skills { .. } => unreachable!("handled before connecting"),
     }
     Ok(())
+}
+
+async fn skills(server: &str, timeout: u64, session: &str, block: &str) -> Result<()> {
+    let endpoint = rex_core::transport::Endpoint::new(server, Duration::from_secs(timeout))?;
+    let started = std::time::Instant::now();
+    let discovery = rex_core::skills::discover(endpoint, session, block, Duration::from_secs(timeout)).await?;
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+    let mut counts = serde_json::Map::new();
+    for command in &discovery.commands {
+        let count = counts.entry(command.source.name()).or_insert(json!(0));
+        *count = json!(count.as_u64().unwrap_or(0) + 1);
+    }
+    let mut report = discovery.to_json();
+    report["elapsed_ms"] = json!(elapsed_ms);
+    report["counts"] = Value::Object(counts);
+    print_json(report)
 }
 
 async fn snapshot(c: &mut Control, s: &str, b: &str, format: &str) -> Result<String> {

@@ -26,7 +26,7 @@ class BackgroundAlertsTest {
         try {
             val store=AlertDestinations(prefs)
             val target=AlertDestination("server","https://fixture.example","session","block","key","version")
-            assertNull(store.consume(android.net.Uri.parse("rexlink-alert://open/untrusted")))
+            assertNull(store.consume(android.net.Uri.parse("pina-alert://open/untrusted")))
             val uri=store.issue(target);assertEquals(target,store.consume(uri));assertNull(store.consume(uri))
             assertNull(store.consume(android.net.Uri.parse("https://open/$uri")))
         } finally {context.deleteSharedPreferences(name)}

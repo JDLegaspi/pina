@@ -1,80 +1,129 @@
-# <img src="rexling-android/app/src/main/res/drawable-nodpi/rexlink_dinosaur.png" alt="Rexling app icon" width="40" height="40" align="absmiddle"> Rexling
+# <img src="docs/pina/icon.png" alt="Pina app icon" width="40" height="40" align="absmiddle"> Pina
 
-## Overview
+Pina is an Android app for keeping up with the Claude Code sessions you run in [Rex](https://www.superlogical.com/rex) on your Mac. It lists every agent by what it needs from you, notifies you when one finishes or is waiting for input, and opens its terminal when you tap it. It looks like Rex on the Mac, in light or dark.
 
-Rexling is an unofficial native Android client for Superlogical Rex.
-Access your terminal sessions from your phone over Tailscale, with touch controls
-for everyday shell work, Neovim, Codex and Claude.
+| Sessions by status | Sessions by folder | Dark mode |
+| :---: | :---: | :---: |
+| <img src="docs/pina/screenshots/home-status-light.png" alt="Agent sessions grouped by status, with a blocked agent waiting for permission" width="250"> | <img src="docs/pina/screenshots/home-folders-light.png" alt="Every terminal grouped by Rex session" width="250"> | <img src="docs/pina/screenshots/home-status-dark.png" alt="Agent sessions in dark mode" width="250"> |
 
-| Light theme | Dark theme |
+## What Pina does
+
+- **See every agent at a glance.** Claude Code panes are grouped as Blocked, Working, Error, Done, and Idle, and each row shows the pane's name. A blocked agent shows what it is waiting for, such as "Waiting for permission: approve plan".
+- **Switch to folders.** Tap **Folders** to see every terminal grouped by Rex session, the way the Rex sidebar does.
+- **Get notified.** Pina tells you when an agent finishes, needs permission, asks a question, or fails. Tap the notification to open that pane. While you work in one terminal, a banner tells you when another agent needs you.
+- **Use your skills.** Type `/` in a Claude Code prompt, or tap the `/` key, to search Claude Code's commands and every skill installed on your Mac, including plugin and project skills.
+- **Send files to Claude.** Tap the paperclip to send any file from your phone. Rex saves it on your Mac and types its path into the prompt.
+- **Use the full terminal.** Each pane is a real terminal, with keys for Ctrl, arrows, Tab, and Esc.
+
+| Slash commands | Search | Agent banner |
+| :---: | :---: | :---: |
+| <img src="docs/pina/screenshots/picker-light.png" alt="Slash command picker listing skills" width="250"> | <img src="docs/pina/screenshots/picker-search-light.png" alt="Searching skills for brain" width="250"> | <img src="docs/pina/screenshots/banner-light.png" alt="Banner saying another agent needs permission" width="250"> |
+
+## Set up Pina
+
+Setup takes about 10 minutes. You need:
+
+- A Mac running Rex.
+- A free [Tailscale](https://tailscale.com) account. Tailscale connects your phone to your Mac from anywhere, without opening a port to the internet.
+- An Android phone with Android 9 or later, on a 64-bit ARM chip. Most phones from 2019 onward qualify.
+
+### Step 1. Turn on HTTPS for your tailnet
+
+Rex serves its connection over HTTPS, so your tailnet needs certificates.
+
+1. Open the [DNS page](https://login.tailscale.com/admin/dns) of the Tailscale admin console.
+2. If **MagicDNS** is off, click **Enable MagicDNS**.
+3. Under **HTTPS Certificates**, click **Enable HTTPS**.
+
+### Step 2. Serve Rex over Tailscale
+
+Do this on your Mac.
+
+1. In Rex, open **Settings** and go to the Tailscale section.
+2. Turn on **Serve over Tailscale**.
+3. The first time, Rex asks you to sign in. Open the link and approve the new device. It appears in your tailnet as `rex`.
+4. Leave **Limit access to your Tailscale account** on, so only you can reach your terminals.
+5. Find your server address. In Rex, choose **Pair Device with QR Code**, or run this in a terminal:
+
+   ```sh
+   rex server tailscale pair --json
+   ```
+
+   The address looks like `https://rex.your-tailnet.ts.net`. Keep it for step 5.
+
+### Step 3. Put your phone on your tailnet
+
+1. Install [Tailscale](https://play.google.com/store/apps/details?id=com.tailscale.ipn) from Google Play.
+2. Sign in with the same account you used on your Mac.
+3. Tap **Connect**. In the Tailscale app, your Mac's `rex` device now appears in the device list.
+
+### Step 4. Install Pina
+
+1. On your phone, open the [latest release](https://github.com/JDLegaspi/pina/releases/latest) and download the `.apk` file.
+2. Open the downloaded file. If Android asks, allow your browser to install unknown apps.
+3. Tap **Install**.
+
+If installation is blocked on a Samsung phone, **Auto Blocker** is on. Go to **Settings → Security and privacy → Auto Blocker**, turn it off, install Pina, and then turn it back on.
+
+### Step 5. Add your Mac
+
+| Open Pina | Add your server |
 | :---: | :---: |
-| <img src="docs/images/rexlink-android.png" alt="Rexling in light theme" width="340"> | <img src="docs/images/rexlink-android-dark.png" alt="Rexling in dark theme" width="340"> |
+| <img src="docs/pina/screenshots/onboarding-light.png" alt="Pina's first screen with an Add server button" width="250"> | <img src="docs/pina/screenshots/add-server-light.png" alt="The Add server dialog with a name and a Tailscale address" width="250"> |
 
-## Installation and build
+1. Open Pina and tap **Add server**.
+2. In **Name**, type a name for your Mac, such as `MacBook`.
+3. In **Server URL**, paste the address from step 2, such as `https://rex.your-tailnet.ts.net`.
+4. Leave **Connection network** set to **Phone network / VPN**.
+5. Tap **Save & connect**.
 
-Rexling supports **Android 9 or newer on 64-bit ARM devices**. You need a running
-Rex server. Connect through your phone’s Tailscale VPN, optional built-in Tailscale,
-or SSH.
+Your sessions appear within a few seconds. On Android 17 or later, allow local network access if Android asks.
 
-### Install an APK
+### Step 6. Turn on notifications
 
-Download an APK from [GitHub Releases](https://github.com/shulhi/rexling/releases),
-open it on your phone, and allow installation when Android asks. Open Rexling
-and enter your Rex server’s private HTTPS URL or `ssh://user@host`. On Android 17+, allow local
-network access when prompted.
+When Pina asks, tap **Turn On**, and then allow notifications. To change this later, tap the gear and open **Preferences**.
 
-### Build from source
+Something not working? [Connect Pina to Rex over Tailscale](docs/tailscale.md) covers each step in more detail and lists fixes for common errors. Pina can also connect over SSH, and has its own built-in Tailscale if you would rather not install the Tailscale app. See [connection options](docs/connections.md).
 
-Install Android Studio, the Android SDK/NDK, Rust, Go, Python and curl. Exact versions
-and setup instructions are in [BUILDING.md](BUILDING.md).
+## Use Pina
+
+- **Open an agent.** Tap a row to open its terminal. Tap **←** in the header to return to your sessions.
+- **Run a skill.** Type `/` at an empty Claude Code prompt, or tap **/** in the key bar. Search, tap a command, and Pina types it into the prompt. Add any arguments, then press Enter.
+- **Send a file.** Tap the paperclip in the key bar and choose one or more files. Pina uploads them to your Mac and types their paths into the prompt, ready for you to send.
+- **Change the look.** Tap the gear, then **Preferences → Appearance**, and choose **System**, **Light**, or **Dark**.
+
+<img src="docs/pina/screenshots/keyboard-bar-light.png" alt="The key bar with the slash and paperclip keys" width="520">
+
+## Build from source
+
+You need macOS on Apple silicon or x86_64 Linux, with Python 3, curl, Go, and JDK 25. The setup script installs the rest: Rust with the Android target, Android SDK platform 37, build tools 36, and NDK 30.
 
 ```sh
-git clone https://github.com/shulhi/rexling.git
-cd rexling
+git clone https://github.com/JDLegaspi/pina.git
+cd pina
+./scripts/setup-toolchain.sh
+export JAVA_HOME=/path/to/jdk-25 ANDROID_HOME="$HOME/Library/Android/sdk" PATH="$HOME/.cargo/bin:$PATH"
 ./rexling-android/scripts/gradle.sh :app:shareRelease
 ```
 
-The build downloads the pinned native dependencies and produces an APK and
-SHA-256 checksum in `rexling-android/dist/`. Open `rexling-android/` in Android
-Studio to work on the app.
+The APK is in `rexling-android/dist/`. To install it on a phone with USB or wireless debugging turned on, run:
 
-## Features
+```sh
+adb install -r rexling-android/dist/Pina-*.apk
+```
 
-- **Connection options** — SSH with encrypted key storage or keyless Tailscale SSH,
-  optional built-in Tailscale and custom Headscale control servers. See [connection setup](docs/connections.md).
+The first build downloads Zig and Ghostty's source and takes several minutes. [BUILDING.md](BUILDING.md) lists exact versions and the checks you can run without a phone.
 
-- **Servers and sessions** — connect to multiple Rex servers, create and rename
-  sessions, and restore your last session, tab and pane.
-- **Tabs and panes** — switch, rename and reorder terminals, preview split
-  layouts, split right or below, and dock or float panes. Optional minimized
-  floating panes sit in an icon dock.
-- **Automatic pane takeover** — opening a pane takes control and resizes its
-  terminal to fit your screen, letting terminal applications reflow their text.
-- **Kitty graphics** — display terminal images through libghostty, including
-  PNG/RGB/RGBA images, transparency and animation. Images restore with the
-  terminal snapshot when reconnecting.
-- **Touch terminal controls** — arrow joystick, precise navigation popup,
-  Ctrl shortcuts, function keys and customizable Neovim shortcuts in a wheel
-  or grid.
-- **Image uploads** — paste or attach images to supported Rex servers, with
-  upload progress and cancellation. Rex inserts the uploaded file’s path into
-  the destination terminal. Requires Rex API revision 11 or newer.
-- **Port forwarding** — open remote TCP services in your phone’s browser, with
-  automatic reconnection and background forwarding. Requires Rex API revision 14
-  or newer.
-- **Activity and notifications** — track working tasks, finished tasks and
-  requests for attention, with optional background alerts.
-- **Appearance** — light, dark and system themes, program icons and frosted
-  overlays.
+To run the tests and re-record the screenshots in this README, run:
 
-See the [Android guide](rexling-android/README.md) for more details.
+```sh
+./rexling-android/scripts/gradle.sh :app:testDebugUnitTest :app:recordRoborazziDebug
+```
 
-## Project status and license
+## How it works
 
-Rexling is an independent, unofficial client maintained on a **best-effort basis**.
-Compatibility with future Rex versions and ongoing support are not guaranteed.
-The app is provided **AS IS**, under the terms of the license.
+Pina is a fork of [Rexling](https://github.com/shulhi/rexling). A Rust core speaks Rex's WebSocket API and renders terminals with libghostty. A Go module provides SSH and built-in Tailscale. Pina's sessions screen, notifications, command picker, uploads, and Apple-style design sit in the Kotlin and Compose app on top. [docs/pina/DESIGN.md](docs/pina/DESIGN.md) records each design decision and why it was made.
 
-Copyright 2026 Shulhi Sapli and contributors. Project code is licensed under
-[Apache License 2.0](LICENSE). Third-party dependencies and assets retain their
-own terms, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## License
+
+Pina is licensed under the [Apache License 2.0](LICENSE), like Rexling, which it is based on: Copyright 2026 Shulhi Sapli and contributors. Pina is an independent, unofficial client. It is not affiliated with Superlogical or Anthropic. Third-party components, including the Inter font (SIL Open Font License), keep their own terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -89,8 +89,8 @@ private class PopupFrostNode(haze: HazeState,style: HazeStyle,var invalidator: P
 }
 
 @Composable internal fun DrawerHandle() {
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(16.dp),contentAlignment=androidx.compose.ui.Alignment.Center) {
-        androidx.compose.foundation.layout.Box(Modifier.width(28.dp).height(3.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant,androidx.compose.foundation.shape.RoundedCornerShape(3.dp)))
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(top=5.dp,bottom=6.dp),contentAlignment=androidx.compose.ui.Alignment.Center) {
+        androidx.compose.foundation.layout.Box(Modifier.size(36.dp,5.dp)
+            .background(LocalPinaColors.current.tertiaryLabel,androidx.compose.foundation.shape.RoundedCornerShape(2.5.dp)))
     }
 }

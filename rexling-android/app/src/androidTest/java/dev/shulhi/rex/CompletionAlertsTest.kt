@@ -108,7 +108,7 @@ class CompletionAlertsTest {
                 val first=alerts().single()
                 assertTrue(first.notification.extras.getString(Notification.EXTRA_TITLE)!!.startsWith("Finished"))
                 assertEquals(Notification.VISIBILITY_PRIVATE,first.notification.visibility)
-                assertEquals("Rexling task finished",first.notification.publicVersion.extras.getString(Notification.EXTRA_TITLE))
+                assertEquals("Pina task finished",first.notification.publicVersion.extras.getString(Notification.EXTRA_TITLE))
                 peer.report("idle","report cleared");until("Idle report missing") {ledger().contains("state:idle")}
                 assertEquals("Completion must remain readable after its report clears",first.postTime,alerts().single().postTime)
                 scenario!!.moveToState(Lifecycle.State.RESUMED)

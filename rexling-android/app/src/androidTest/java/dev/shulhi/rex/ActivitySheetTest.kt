@@ -35,7 +35,7 @@ class ActivitySheetTest {
         val a=ServerProfile.create("Linux","https://linux.example","a");val b=ServerProfile.create("Mac","https://mac.example","b")
         val first=record("working","Building","s1","pane1");val second=record("blocked","Review","s2","pane2")
         var selected: ActivityTarget?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {ActivitySheet(listOf(ActivitySource(a,true,false,"",false,listOf(first)),ActivitySource(b,true,false,"",false,listOf(second))),{},{selected=it},{})}}
+        ui.setContent {PinaTheme(false) {ActivitySheet(listOf(ActivitySource(a,true,false,"",false,listOf(first)),ActivitySource(b,true,false,"",false,listOf(second))),{},{selected=it},{})}}
         ui.onNodeWithText("Linux").assertIsDisplayed();ui.onNodeWithText("Mac").assertIsDisplayed()
         capture("activity-compact-light.png")
         ui.onNodeWithContentDescription("Refresh activity").assertIsEnabled()
@@ -61,7 +61,7 @@ class ActivitySheetTest {
     @Test fun staleActivityIsDisabledAndShowsItsRefreshError() {
         val server=ServerProfile.create("Linux","https://linux.example","a");var selected=false
         val record=record("done","Finished task","s","p")
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {ActivitySheet(listOf(ActivitySource(server,false,false,"Connection interrupted",false,listOf(record))),{},{selected=true},{})}}
+        ui.setContent {PinaTheme(true) {ActivitySheet(listOf(ActivitySource(server,false,false,"Connection interrupted",false,listOf(record))),{},{selected=true},{})}}
         ui.onNodeWithText("Connection interrupted").assertIsDisplayed()
         ui.onNodeWithContentDescription("Finished task, Finished, Session s, Linux").assertIsNotEnabled()
         capture("activity-compact-dark.png")
@@ -71,7 +71,7 @@ class ActivitySheetTest {
         val server=ServerProfile.create("Linux","https://linux.example","a");val task=record("done","Review","s","p").copy(message="")
         val older=record("done","Earlier task","s","older").copy(message="")
         val seen=androidx.compose.runtime.mutableStateOf(setOf(older.key));var opened=0
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {ActivitySheet(listOf(ActivitySource(server,true,false,"",false,listOf(task,older),seen.value)),{},{opened++},{},onSeen={seen.value+=it.record.key})}}
+        ui.setContent {PinaTheme(true) {ActivitySheet(listOf(ActivitySource(server,true,false,"",false,listOf(task,older),seen.value)),{},{opened++},{},onSeen={seen.value+=it.record.key})}}
         val rowDescription="Review, Finished, Session s, Linux"
         fun textBounds()=ui.onNodeWithText("Review",useUnmergedTree=true).fetchSemanticsNode().boundsInRoot.let {title->
             val context=ui.onNode(hasText("Session s · Tab") and hasAnyAncestor(hasContentDescription(rowDescription)),useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
@@ -94,7 +94,7 @@ class ActivitySheetTest {
     }
     @Test fun workingAndNeedsYouBreatheUniformlyAndFinishedStaysSolid() {
         ui.mainClock.autoAdvance=false
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             androidx.compose.foundation.layout.Row {
                 ActivityStateBar(ActivityState.WORKING,false,androidx.compose.ui.Modifier.testTag("working").size(3.dp,39.dp))
                 ActivityStateBar(ActivityState.BLOCKED,false,androidx.compose.ui.Modifier.testTag("attention").size(3.dp,39.dp))
@@ -121,7 +121,7 @@ class ActivitySheetTest {
         assertEquals(bounds,moving.fetchSemanticsNode().boundsInRoot)
     }
     @Test fun workingBarHighlightRendersAlongEitherAxis() {
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             val color=MaterialTheme.colorScheme.primary
             androidx.compose.foundation.layout.Row {
                 androidx.compose.foundation.Canvas(androidx.compose.ui.Modifier.testTag("tab-flash").size(39.dp,3.dp)) {
@@ -145,7 +145,7 @@ class ActivitySheetTest {
         val server=ServerProfile.create("Mac","https://fixture.example","mac")
         val loading=androidx.compose.runtime.mutableStateOf(false)
         val items=androidx.compose.runtime.mutableStateOf(listOf(record("done","Review","s","p")))
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             ActivitySheet(listOf(ActivitySource(server,true,loading.value,"",false,items.value)),{},{},{})
         }}
         val before=ui.onNodeWithText("Review").fetchSemanticsNode().boundsInRoot
@@ -158,7 +158,7 @@ class ActivitySheetTest {
     @Test fun eyeHasAnAccessibleAttentionIndicator() {
         val dark=androidx.compose.runtime.mutableStateOf(false)
         val count=androidx.compose.runtime.mutableIntStateOf(2)
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {TerminalActions(true,true,{},{},attentionCount=count.intValue)}}
+        ui.setContent {PinaTheme(dark.value) {TerminalActions(true,true,{},{},attentionCount=count.intValue)}}
         val eye=ui.onNodeWithContentDescription("Activity").fetchSemanticsNode().boundsInRoot
         val dot=ui.onNodeWithTag("Activity unread dot",useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
         // The reference badges the 19dp eye, not the corner of the 41dp button.

@@ -26,7 +26,7 @@ class TerminalProgressUiTest {
     }
     @Test fun tabProgressUpdatesStateAndClearsWithoutChangingTheTitle() {
         var report by mutableStateOf<TerminalProgress?>(TerminalProgress("set",40))
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             Box(Modifier.width(360.dp).background(MaterialTheme.colorScheme.surface)) {
                 TerminalTabs(listOf(WindowItem("w","Cargo build",listOf(BlockItem("b","cargo")))),"w",true,{},
                     panePrograms={listOf(ProgramIdentity.resolve(listOf("cargo")))},selectedPane={0},paneProgress={report},actions={})
@@ -47,7 +47,7 @@ class TerminalProgressUiTest {
     @Test fun activityShowsPercentageWithoutMarkSeenForProgressOnlyRows() {
         val record=ActivityRecord.parse(JSONObject("""{"session":"s","sessionLabel":"Build session","windowLabel":"Build","block":"b","id":"osc9-progress","title":"Cargo build","app":"cargo","state":"working","progressOnly":true,"progress":40,"terminalProgress":{"state":"set","progress":40}}"""))!!
         val server=ServerProfile.create("Mac","https://mac.example","mac")
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             ActivitySheet(listOf(ActivitySource(server,true,false,"",false,listOf(record))),{},{},{})
         }}
         ui.onNodeWithText("40%",substring=true).assertIsDisplayed()

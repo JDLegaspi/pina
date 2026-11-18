@@ -157,6 +157,7 @@ impl Peer {
             revision: 0,
             json: String::new(),
             activity: Arc::default(),
+            panes: Arc::default(),
             pending_previews: BTreeMap::new(),
             frame: None,
             key: String::new(),

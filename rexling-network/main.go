@@ -190,7 +190,7 @@ func tailServer() (*tsnet.Server, error) {
 		control = "https://controlplane.tailscale.com"
 	}
 	sum := sha256.Sum256([]byte(control))
-	server := &tsnet.Server{Dir: filepath.Join(config.Directory, hex.EncodeToString(sum[:16])), Hostname: "rexling-android", ControlURL: config.ControlURL,
+	server := &tsnet.Server{Dir: filepath.Join(config.Directory, hex.EncodeToString(sum[:16])), Hostname: "pina-android", ControlURL: config.ControlURL,
 		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}
 	if err := server.Start(); err != nil {
 		server.Close()

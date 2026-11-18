@@ -11,7 +11,7 @@ class NeovimEditorUiTest {
     @get:Rule val ui=createComposeRule()
     @Test fun groupsCanBeCreatedFilledRenamedAndUngroupedWithoutLosingCommands() {
         var saved: List<NeovimShortcut>?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {NeovimShortcutsSheet(listOf(NeovimShortcut(":w",":w")),{text->
+        ui.setContent {PinaTheme(false) {NeovimShortcutsSheet(listOf(NeovimShortcut(":w",":w")),{text->
             runCatching {saved=NeovimShortcuts.parse(text)}.exceptionOrNull()?.message
         },{})}}
         capture("list")
@@ -37,7 +37,7 @@ class NeovimEditorUiTest {
     }
     @Test fun emptyGroupCannotBeSilentlyLostOnSave() {
         var saves=0;var closed=false
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {NeovimShortcutsSheet(NeovimShortcuts.defaults,{saves++;null},{closed=true})}}
+        ui.setContent {PinaTheme(false) {NeovimShortcutsSheet(NeovimShortcuts.defaults,{saves++;null},{closed=true})}}
         ui.onNodeWithText("Add group").performClick()
         ui.onNodeWithText("Group name").performTextInput("Empty")
         ui.onNodeWithText("Done").performClick()
@@ -48,7 +48,7 @@ class NeovimEditorUiTest {
     @Test fun rootDragMovesWholeGroupAndEditingCanMoveAShortcutToAnotherGroup() {
         val initial=listOf(NeovimShortcut(":w",":w"),NeovimShortcut("Quit",":q","Files"),NeovimShortcut("Build",":make","Tools"),NeovimShortcut(":wa",":wa"))
         var saved: List<NeovimShortcut>?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {NeovimShortcutsSheet(initial,{text->
+        ui.setContent {PinaTheme(false) {NeovimShortcutsSheet(initial,{text->
             runCatching {saved=NeovimShortcuts.parse(text)}.exceptionOrNull()?.message
         },{})}}
         val from=ui.onNodeWithContentDescription("Open Neovim group Files").fetchSemanticsNode().boundsInRoot
@@ -63,7 +63,7 @@ class NeovimEditorUiTest {
     }
     @Test fun commandContainingAssignmentIsNeverSilentlyRewritten() {
         var saved: List<NeovimShortcut>?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {NeovimShortcutsSheet(emptyList(),{text->
+        ui.setContent {PinaTheme(false) {NeovimShortcutsSheet(emptyList(),{text->
             runCatching {saved=NeovimShortcuts.parse(text)}.exceptionOrNull()?.message
         },{})}}
         ui.onNodeWithText("Add shortcut").performClick()
@@ -81,7 +81,7 @@ class NeovimEditorUiTest {
     @Test fun ungroupedIsExpandedAndCollapsingItDoesNotCreateAGroupOrChangeMenuOrder() {
         val initial=listOf(NeovimShortcut(":w",":w"),NeovimShortcut("Quit",":q","Files"),NeovimShortcut(":wa",":wa"))
         var saved: List<NeovimShortcut>?=null
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {NeovimShortcutsSheet(initial,{text->
+        ui.setContent {PinaTheme(false) {NeovimShortcutsSheet(initial,{text->
             runCatching {saved=NeovimShortcuts.parse(text)}.exceptionOrNull()?.message
         },{})}}
         ui.onNodeWithContentDescription("Edit Neovim shortcut :w").assertIsDisplayed()

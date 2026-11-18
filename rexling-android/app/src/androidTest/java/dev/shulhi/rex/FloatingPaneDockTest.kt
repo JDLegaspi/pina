@@ -24,7 +24,7 @@ class FloatingPaneDockTest {
         val panes=listOf(BlockItem("vim","Editor"),BlockItem("shell","Logs"))
         val programs=mapOf("vim" to ProgramIdentity(ProgramKind.NEOVIM,"nvim"),"shell" to ProgramIdentity.Terminal)
         var minimized=0;var capturing=false
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             Box(Modifier.fillMaxSize()) {
                 FloatingPaneDock(panes,active.value,programs,emptyMap(),true,{active.value=it},{active.value=null;minimized++},Modifier.align(Alignment.BottomEnd),directories=mapOf("vim" to "~/Dev/rexling","shell" to "~/Dev/logs"),onExpandedChange={capturing=it})
             }
@@ -63,7 +63,7 @@ class FloatingPaneDockTest {
     }
     @Test fun singleFloatingPaneOpensDirectlyAndMinimizesWithoutAMenu() {
         val active=mutableStateOf<String?>(null);var minimized=0
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             Box(Modifier.fillMaxSize()) {
                 FloatingPaneDock(listOf(BlockItem("one","Editor")),active.value,mapOf("one" to ProgramIdentity(ProgramKind.NEOVIM,"nvim")),emptyMap(),true,
                     {active.value=it},{active.value=null;minimized++},Modifier.align(Alignment.BottomEnd))
@@ -77,7 +77,7 @@ class FloatingPaneDockTest {
     }
     @Test fun preferenceCanBeEnabledAndDisabled() {
         val enabled=mutableStateOf(false)
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             PreferencesSheet({},{},{},{},{},minimizeFloatingPanes=enabled.value,onMinimizeFloatingPanes={enabled.value=it})
         }}
         val toggle=ui.onNode(hasText("Minimize floating panes") and isToggleable())

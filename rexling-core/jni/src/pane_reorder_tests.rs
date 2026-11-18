@@ -47,7 +47,7 @@ async fn exercise(reject_second:bool,stale:bool) {
         }
     });
     let control=Control::connect(endpoint,None,Trace::default()).await.unwrap();
-    let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+    let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
     let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
     actor.control=Some(control);actor.visible=true;actor.phase="connected".into();actor.selected_session="s".into();actor.selected_block="a".into();actor.navigation_id=11;
     actor.set_view(&view(&["a".into(),"b".into(),"c".into()]));

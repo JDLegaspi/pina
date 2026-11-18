@@ -47,6 +47,7 @@ data class AppState(
     val programs: Map<String, ProgramIdentity> = emptyMap(),
     val workingBlocks: Set<String> = emptySet(),
     internal val activity: List<ActivityRecord> = emptyList(),
+    internal val panes: List<PaneInfo> = emptyList(),
     val activityLoading: Boolean=false,val activityError: String="",val activityPartial: Boolean=false,
     val titles: Map<String, String> = emptyMap(),
     val directories: Map<String, String> = emptyMap(),
@@ -61,11 +62,12 @@ data class AppState(
 ) {
     val connected: Boolean get() = phase == "connected"
     companion object {
-        fun parse(text: String,previousActivity: List<ActivityRecord> = emptyList()): AppState {
+        fun parse(text: String,previousActivity: List<ActivityRecord> = emptyList(),previousPanes: List<PaneInfo> = emptyList()): AppState {
             val root = JSONObject(text)
             return AppState(
                 workingBlocks = root.optJSONArray("working").objects {it as String}.toSet(),
                 activity=if(root.has("activity")) root.optJSONArray("activity").objects {ActivityRecord.parse(it as JSONObject)}.filterNotNull().take(1024) else previousActivity,
+                panes=if(root.has("panes")) root.optJSONArray("panes").objects {(it as? JSONObject)?.let(PaneInfo::parse)}.filterNotNull().take(1024) else previousPanes,
                 activityLoading=root.optBoolean("activityLoading"),activityError=root.optString("activityError"),activityPartial=root.optBoolean("activityPartial"),
                 titles = root.optJSONObject("titles")?.let { titles -> titles.keys().asSequence().associateWith { id ->
                     titles.optString(id).filterNot { it.isISOControl() || Character.getType(it)==Character.FORMAT.toInt() }.take(256)

@@ -26,7 +26,7 @@ class PaneSwitchMinimapTest {
     @Test fun splitGeometryAndHighlightedPaneMatchTheCurrentSwipeTarget() {
         val active=mutableStateOf("b");val dark=mutableStateOf(false);var primary=Color.Unspecified
         val layout=listOf(PanePlacement("a",0f,0f,.5f,1f),PanePlacement("b",.5f,0f,.5f,.5f),PanePlacement("c",.5f,.5f,.5f,.5f))
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {
+        ui.setContent {PinaTheme(dark.value) {
             primary=MaterialTheme.colorScheme.primary
             PaneSwitchMinimap(layout,active.value,Modifier.size(112.dp,72.dp))
         }}

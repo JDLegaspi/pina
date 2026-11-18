@@ -113,7 +113,7 @@ class NetworkUiTest {
     @Test fun emptyServerStateOpensAddServerInsteadOfQuickTailscaleSetup() {
         var added=0
         compose.setContent {MaterialTheme {EmptyServerContent {added++}}}
-        compose.onNodeWithText("Welcome to Rexling").assertIsDisplayed()
+        compose.onNodeWithText("Welcome to Pina").assertIsDisplayed()
         compose.onNodeWithText("Rex server URL").assertDoesNotExist()
         compose.onNodeWithText("Connect over Tailscale").assertDoesNotExist()
         compose.onNodeWithText("Add server").performClick()
@@ -121,7 +121,7 @@ class NetworkUiTest {
     }
     @Test fun connectedDevicesAndRoutesShareTheTailnetStatusCard() {
         var dark by androidx.compose.runtime.mutableStateOf(false)
-        compose.setContent {RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+        compose.setContent {PinaTheme(dark) {
             androidx.compose.material3.Surface(color=MaterialTheme.colorScheme.background) {
             androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth().padding(20.dp)) {
                 TailscaleStatusCard("Running",false,listOf(TailscalePeerStatus("shipyard-rex","Direct"),TailscalePeerStatus("MacBook","Tailscale relay"))) {}

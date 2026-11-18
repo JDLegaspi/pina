@@ -27,7 +27,7 @@ class PaneLayoutMapTest {
     private val programs=mapOf("a" to ProgramIdentity.resolve(listOf("fish")),"b" to ProgramIdentity.resolve(listOf("codex")),"c" to ProgramIdentity.resolve(listOf("claude")))
     private val calls=mutableListOf<String>()
     private fun show(enabled: Boolean=true,dark: Boolean=false) {
-        ui.setContent {RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+        ui.setContent {PinaTheme(dark) {
             Surface {Box(Modifier.width(320.dp)) {
                 PaneLayoutMap(window.value,selected.value,programs,mapOf("b" to "Code","c" to "Plan"),enabled) {calls+=it;selected.value=it}
             }}

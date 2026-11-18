@@ -8,6 +8,7 @@ replace licenses or grant trademark rights for the following upstream material.
 | Smooth-scrollback implementation | Adapted from michaelcosj/rexling commit `601c3852fe4ff4db6fcb201d059266c1fe37506c`, by michael; Apache 2.0. Local changes preserve Rexling input semantics and replace row-cache shift search with offset-based reuse. |
 | Ghostty/libghostty-vt | MIT; `rexling-core/native/GHOSTTY_LICENSE.txt`, pinned source in `ghostty-source.json`, and Android `assets/licenses/GHOSTTY_LICENSE.txt` |
 | JetBrains Mono / Nerd Font font files | SIL Open Font License and Nerd Fonts notices, sources and checksums in `rexling-android/app/src/main/assets/licenses/` |
+| Inter UI font (Regular, Medium, SemiBold, Bold, v4.1) | SIL Open Font License 1.1; The Inter Project Authors, https://github.com/rsms/inter release v4.1 static TTFs; `INTER_OFL.txt` in the Android license assets |
 | Noto Sans Symbols 2 fallback font | SIL Open Font License; `NOTO_SYMBOLS_OFL.txt` and pinned source/checksum in `NOTO_SYMBOLS_SOURCE.json` in the Android license assets |
 | Simple Icons logos | CC0-1.0; `simple-icons-CC0.txt` and `program-icons.json` in the same license assets; brand marks remain their owners' property |
 | User-supplied Superlogical program tiles and Cloudflare glyph | Retained SVG sources, source catalog and checksums in `rexling-android/artwork/program-icons/superlogical/metadata.json`; trademarks and logos remain their owners' property |

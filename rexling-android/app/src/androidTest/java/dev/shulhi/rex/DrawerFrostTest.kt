@@ -36,7 +36,7 @@ class DrawerFrostTest {
         val window=WindowItem("w","Project",listOf(BlockItem("b","shell")))
         val record=ActivityRecord.parse(JSONObject().put("session","s").put("sessionLabel","Development").put("windowLabel","Project")
             .put("block","b").put("state","blocked").put("kind","permission").put("title","Review changes").put("app","codex"))!!
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {
+        ui.setContent {PinaTheme(dark.value) {
             val haze=remember {HazeState()}
             Box(Modifier.fillMaxSize()) {
                 Canvas(Modifier.fillMaxSize().hazeSource(haze)) {

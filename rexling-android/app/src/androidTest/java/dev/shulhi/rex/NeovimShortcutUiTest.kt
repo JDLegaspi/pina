@@ -206,7 +206,7 @@ class NeovimShortcutUiTest {
         val dark=mutableStateOf(false)
         val items=NeovimShortcuts.defaults+(7..36).map {NeovimShortcut("Action $it",":echo $it")}
         val selected=mutableListOf<NeovimShortcut>()
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {
+        ui.setContent {PinaTheme(dark.value) {
             NeovimShortcutButton(items,"one",true,{item,_->selected+=item},{})
         }}
         captureMenu("button","Neovim shortcuts")
@@ -240,7 +240,7 @@ class NeovimShortcutUiTest {
         val dark=mutableStateOf(false)
         val items=NeovimShortcuts.parse(":w\n[Git]\n"+(1..19).joinToString("\n") {"Action $it = :echo $it"}+"\n[]\n:q")
         val selected=mutableListOf<NeovimShortcut>()
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {
+        ui.setContent {PinaTheme(dark.value) {
             NeovimShortcutButton(items,"one",true,{item,_->selected+=item},{})
         }}
         ui.onNodeWithContentDescription("Neovim shortcuts").performClick()
@@ -281,7 +281,7 @@ class NeovimShortcutUiTest {
         val dark=mutableStateOf(false);var customized=false
         val items=NeovimShortcuts.parse(":w\n[Git]\n"+(1..19).joinToString("\n") {"Action $it = :echo $it"}+"\n[]\n:q")
         val sent=mutableListOf<NeovimShortcut>()
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {
+        ui.setContent {PinaTheme(dark.value) {
             NeovimShortcutButton(items,"one",true,{item,_->sent+=item},{customized=true},layout=NeovimShortcutLayout.CIRCULAR)
         }}
         ui.onNodeWithContentDescription("Neovim shortcuts").performClick()

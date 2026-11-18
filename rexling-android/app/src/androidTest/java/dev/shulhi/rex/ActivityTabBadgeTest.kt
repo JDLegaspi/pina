@@ -26,7 +26,7 @@ class ActivityTabBadgeTest {
     private val local=ActivityRecord.parse(JSONObject().put("session","s").put("block","a1").put("state","done"))!!
     private val windows=listOf(WindowItem("a","Tab A",listOf(BlockItem("a1","codex"))),WindowItem("b","Tab B",listOf(BlockItem("b1","fish"))))
     private fun show() {
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {
+        ui.setContent {PinaTheme(dark.value) {
             val items=if(elsewhere.value) listOf(local,local.copy(session="other")) else listOf(local)
             val source=ActivitySource(server,true,false,"",false,items,seen.value)
             val badges=ActivityBadgePolicy.route(listOf(source),server,"s",windows)

@@ -33,19 +33,19 @@ import kotlin.math.roundToInt
         "Close appearance",onClose,hazeState,onBack=if(editing!=null) ({editing=null}) else null) {
         Column(Modifier.fillMaxWidth().heightIn(max=600.dp).padding(bottom=12.dp)) {
             if(editing==null) {
-                Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Appearance.entries.forEach {mode->FilterChip(selected=appearance==mode,onClick={onAppearance(mode)},
-                        label={Text(when(mode){Appearance.SYSTEM->"System";Appearance.DARK->"Dark";Appearance.LIGHT->"Light"})})}
-                }
-                for((label,preset) in listOf("Light theme" to light,"Dark theme" to dark)) {
-                    Row(Modifier.fillMaxWidth().clickable {editing=preset.terminal.dark}.padding(horizontal=16.dp,vertical=12.dp),
-                        verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                        ThemeSwatch(preset)
-                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)) {
-                            Text(label,style=SettingsType.row)
-                            Text(preset.name,style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                SegmentedControl(Appearance.entries.map {it.label},appearance.ordinal,{onAppearance(Appearance.entries[it])},Modifier.padding(horizontal=16.dp,vertical=12.dp))
+                InsetGroupedSection("Terminal theme","Themes recolor the terminal only.",Modifier.padding(top=12.dp)) {
+                    listOf("Light theme" to light,"Dark theme" to dark).forEachIndexed {index,(label,preset)->
+                        if(index>0) GroupedDivider(16.dp+64.dp+12.dp)
+                        Row(Modifier.fillMaxWidth().clickable {editing=preset.terminal.dark}.padding(horizontal=16.dp,vertical=10.dp),
+                            verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                            ThemeSwatch(preset)
+                            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                                Text(label,style=PinaType.body)
+                                Text(preset.name,style=PinaType.subheadline,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            GroupedChevron()
                         }
-                        ChromeSymbol(ChromeIcon.RIGHT,Modifier.size(16.dp),MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {

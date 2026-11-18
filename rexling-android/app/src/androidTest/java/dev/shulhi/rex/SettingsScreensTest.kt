@@ -24,7 +24,7 @@ class SettingsScreensTest {
     @Test fun settingsRemainReadableInBothThemes() {
         var dark by mutableStateOf(false)
         ui.setContent {
-            RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+            PinaTheme(dark) {
                 // Match the workspace: no parent Surface providing a text color.
                 PreferencesSheet({},{},{},{},{})
             }

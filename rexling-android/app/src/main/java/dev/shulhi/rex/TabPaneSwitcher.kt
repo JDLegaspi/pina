@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
         val program=programs[block?.id] ?: ProgramIdentity.Loading
         return program.tabTitle(tab.label,block?.label.orEmpty(),windows.indexOf(tab)+1,titles[block?.id].orEmpty())
     }
-    val drawerSurface=Modifier.drawerFrost(hazeState,BottomSheetDefaults.ExpandedShape)
+    val drawerSurface=Modifier.sheetSurface()
     ModalBottomSheet(onDismissRequest=onClose,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,tonalElevation=0.dp,
         dragHandle=null,contentWindowInsets={WindowInsets(0,0,0,0)}) {
         Column(drawerSurface.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {

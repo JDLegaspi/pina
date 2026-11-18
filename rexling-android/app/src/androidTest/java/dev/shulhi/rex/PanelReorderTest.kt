@@ -23,7 +23,7 @@ class PanelReorderTest {
     private val moves=mutableListOf<String>()
     private val actions=mutableListOf<String>()
     private fun show(page: Int=0) {
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             TabPaneSwitcher(windows.value,"w0","a",emptyMap(),emptyMap(),emptyMap(),{0},enabled.value,enabled.value,enabled.value,
                 {actions+="tab:$it"},{actions+="pane:$it"},{actions+="new-tab"},{_,_->actions+="new-pane"},
                 {actions+="close-tab"},{actions+="close-pane"},{actions+="dismiss"},page,

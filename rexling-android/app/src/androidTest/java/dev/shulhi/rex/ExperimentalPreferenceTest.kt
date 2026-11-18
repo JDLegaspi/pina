@@ -14,7 +14,7 @@ class ExperimentalPreferenceTest {
     @get:Rule val ui=createComposeRule()
     @Test fun codexOptionIsClearlyExperimentalAndTogglesIndependently() {
         val enabled=mutableStateOf(false);var calls=0
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             PreferencesSheet({},{},{},{},{},codexTitleAttention=enabled.value,onCodexTitleAttention={enabled.value=it;calls++})
         }}
         val toggle=ui.onNode(hasText("Codex title attention") and isToggleable())

@@ -23,13 +23,13 @@ class AboutSheetTest {
         assertTrue(info.revision=="unknown" || info.revision.matches(Regex("[0-9a-f]{7,40}")))
         var copied=""
         ui.setContent {MaterialTheme {AboutContent(info,{},{copied=it},{})}}
-        ui.onNodeWithText("Rexling").assertIsDisplayed()
+        ui.onNodeWithText("Pina").assertIsDisplayed()
         ui.onNodeWithText(info.version).assertIsDisplayed()
         ui.onNodeWithText("${info.number} · ${info.type}").assertIsDisplayed()
         ui.onNodeWithText(info.commit).assertIsDisplayed()
         ui.onNodeWithText("Copy build info").performClick()
         ui.runOnIdle {
-            assertTrue(copied.startsWith("Rexling "))
+            assertTrue(copied.startsWith("Pina "))
             assertTrue(copied.contains(info.version));assertTrue(copied.contains("build ${installed.longVersionCode}"))
             assertTrue(copied.contains(info.type));assertTrue(copied.contains(info.commit))
         }
@@ -37,7 +37,7 @@ class AboutSheetTest {
     @Test fun aboutProvidesProjectAndLicenseLinksAndCloses() {
         val links=mutableListOf<String>();var closed=false
         ui.setContent {MaterialTheme {AboutSheetForTest({closed=true},{links.add(it)})}}
-        for(label in listOf("Source code on GitHub","Apache License 2.0","Open-source notices")) ui.onNodeWithText(label).performScrollTo().performClick()
+        for(label in listOf("Rexling source on GitHub","Apache License 2.0","Open-source notices")) ui.onNodeWithText(label).performScrollTo().performClick()
         ui.runOnIdle {
             assertEquals(listOf("https://github.com/shulhi/rexling","https://github.com/shulhi/rexling/blob/main/LICENSE","https://github.com/shulhi/rexling/blob/main/THIRD_PARTY_NOTICES.md"),links)
         }

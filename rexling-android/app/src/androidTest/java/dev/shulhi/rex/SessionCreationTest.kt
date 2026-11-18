@@ -15,7 +15,7 @@ class SessionCreationTest {
     @Test fun creationKeepsTheNameWhenRejectedAndAcceptsAnAutomaticName() {
         val visible=mutableStateOf(true);val enabled=mutableStateOf(true)
         var accepted=false;val names=mutableListOf<String>();var dismissed=0
-        ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {
+        ui.setContent {PinaTheme(false) {
             if(visible.value) NewSessionDialog("Shulhi MBP",enabled.value,{name->names+=name;accepted}) {dismissed++;visible.value=false}
         }}
         ui.onNodeWithText("On Shulhi MBP").assertIsDisplayed()
@@ -32,7 +32,7 @@ class SessionCreationTest {
     }
     @Test fun emptyConnectedServerHasAnExplicitCreationAction() {
         var requested=0
-        ui.setContent {RexTheme(true,ThemeCatalog.defaults[0]) {
+        ui.setContent {PinaTheme(true) {
             EmptySessionContent("Ubuntu",true,{requested++})
         }}
         ui.onNodeWithText("Start a session on Ubuntu.").assertIsDisplayed()

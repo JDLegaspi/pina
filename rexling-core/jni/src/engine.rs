@@ -21,6 +21,7 @@ pub struct Shared {
     pub revision: u64,
     pub json: String,
     pub activity: Arc<Value>,
+    pub panes: Arc<Value>,
     pub pending_previews: BTreeMap<String, Arc<Frame>>,
     pub frame: Option<Arc<Frame>>,
     pub key: String,
@@ -41,7 +42,7 @@ impl Session {
             pending_previews: BTreeMap::new(),
             frame: None,
             key: String::new(),
-            wire: crate::updates::WireBase::default(),activity:Arc::default(),
+            wire: crate::updates::WireBase::default(),activity:Arc::default(),panes:Arc::default(),
         }));
         let latest_navigation=Arc::new(AtomicU64::new(0));
         let worker_navigation=latest_navigation.clone();
@@ -81,6 +82,7 @@ impl Session {
         let mut value: Value=serde_json::from_str(&state.json)?;
         value["revision"]=json!(state.revision);
         value["activity"]=state.activity.as_ref().clone();
+        value["panes"]=state.panes.as_ref().clone();
         value["screen"]=state.frame.as_ref().map_or(Value::Null,|frame|frame_value(frame));
         value["previews"]=Value::Object(std::mem::take(&mut state.pending_previews).into_iter().map(|(id,frame)|(id,frame_value(&frame))).collect());
         Ok(value.to_string())
@@ -254,6 +256,7 @@ struct Actor {
     activity_refresh: tokio::time::Instant,
     activity: Value,
     activity_snapshot: Arc<Value>,
+    panes_snapshot: Arc<Value>,
     activity_dirty: bool,
     activity_panes: Value,
     activity_titles: BTreeMap<String,Value>,
@@ -316,7 +319,7 @@ impl Actor {
             preview_task: None,
             summary_task: None,
             activity_open:false,monitoring:false,activity_task:None,activity_refresh:tokio::time::Instant::now(),
-            activity:json!([]),activity_snapshot:Arc::default(),activity_dirty:true,activity_panes:json!([]),activity_titles:BTreeMap::new(),activity_full:false,activity_inflight_full:false,activity_pending:BTreeSet::new(),activity_inflight:BTreeSet::new(),activity_seen:json!({}),attention_count:0,activity_error:String::new(),activity_partial:false,
+            activity:json!([]),activity_snapshot:Arc::default(),panes_snapshot:Arc::default(),activity_dirty:true,activity_panes:json!([]),activity_titles:BTreeMap::new(),activity_full:false,activity_inflight_full:false,activity_pending:BTreeSet::new(),activity_inflight:BTreeSet::new(),activity_seen:json!({}),attention_count:0,activity_error:String::new(),activity_partial:false,
             program_task: None,
             programs: json!({}),
             directories: json!({}),
@@ -339,9 +342,12 @@ impl Actor {
                 if let Some(title)=self.titles[&id].as_str().filter(|v|!v.is_empty()) {item["title"]=json!(title);}
             }
             self.activity_snapshot=Arc::new(items);self.activity_dirty=false;
+            let panes=crate::activity::pane_list(&self.activity_panes);
+            if *self.panes_snapshot!=panes {self.panes_snapshot=Arc::new(panes);}
         }
         if let Ok(mut shared) = self.shared.lock() {
             shared.activity=self.activity_snapshot.clone();
+            shared.panes=self.panes_snapshot.clone();
             shared.revision += 1;
             shared.frame=self.screen.clone();
             shared.key=format!("{}:{}",self.selected_session,self.selected_block);
@@ -463,9 +469,15 @@ impl Actor {
                     self.activity_task=None;self.activity_refresh=tokio::time::Instant::now()+Duration::from_secs(1);
                     match result {
                         Ok(value)=>{
-                            let next=if value["full"]==true {
-                                self.activity_panes=value["panes"].clone();value["items"].clone()
-                            } else {
+                            let panes=if value["full"]==true {value["panes"].clone()} else {
+                                let mut panes=self.activity_panes.clone();
+                                for fresh in value["panes"].as_array().into_iter().flatten() {
+                                    if let Some(pane)=panes.as_array_mut().into_iter().flatten().find(|p|p["session"]["session_id"]==fresh["session"]["session_id"] && p["block"]["block_id"]==fresh["block"]["block_id"]) {*pane=fresh.clone();}
+                                }
+                                panes
+                            };
+                            if self.activity_panes!=panes {self.activity_panes=panes;self.activity_dirty=true;}
+                            let next=if value["full"]==true {value["items"].clone()} else {
                                 let replaced:BTreeSet<_>=value["replace"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
                                 let mut items:Vec<_>=self.activity.as_array().into_iter().flatten().filter(|item|
                                     !replaced.contains(crate::activity::pane_key(item["session"].as_str().unwrap_or(""),item["block"].as_str().unwrap_or("")).as_str())).cloned().collect();
@@ -481,7 +493,9 @@ impl Actor {
                     }
                     self.activity_inflight.clear();
                     for cached in self.activity_titles.values() {
-                        if crate::activity::apply_title(&mut self.activity,cached["session"].as_str().unwrap_or(""),cached["block"].as_str().unwrap_or(""),&cached["event"]) {self.activity_dirty=true;}
+                        let (session,block)=(cached["session"].as_str().unwrap_or(""),cached["block"].as_str().unwrap_or(""));
+                        if crate::activity::apply_title(&mut self.activity,session,block,&cached["event"]) {self.activity_dirty=true;}
+                        if crate::activity::apply_pane_title(&mut self.activity_panes,session,block,&cached["event"]) {self.activity_dirty=true;}
                     }
                     self.attention_count=crate::activity::attention_count(&self.activity,&self.activity_seen);
                     self.publish();
@@ -826,11 +840,13 @@ impl Actor {
                         return Ok(());
                     }
                     if (name=="child_exited" || (name=="process_changed" && sid!=self.selected_session)) && self.progress_reports.remove(&crate::activity::pane_key(sid,id)).is_some() {self.activity_dirty=true;self.publish();}
-                    if matches!(name,"program_status_changed"|"program_status_removed"|"process_changed"|"child_exited") {
+                    if matches!(name,"program_status_changed"|"program_status_removed"|"process_changed"|"child_exited"|"pwd_changed") {
                         let key=crate::activity::pane_key(sid,id);
                         if self.activity_panes.as_array().into_iter().flatten().any(|p|
                             p["session"]["session_id"]==sid && p["block"]["block_id"]==id) {self.activity_pending.insert(key);} else {self.activity_full=true;}
                     }
+                    let pane_title=name=="title_changed" && crate::activity::apply_pane_title(&mut self.activity_panes,sid,id,&block["payload"]);
+                    if pane_title {self.activity_dirty=true;}
                     if name=="title_changed" {
                         self.activity_titles.insert(crate::activity::pane_key(sid,id),json!({"session":sid,"block":id,"event":block["payload"]}));
                         if self.activity_titles.len()>1024 {if let Some(key)=self.activity_titles.keys().next().cloned() {self.activity_titles.remove(&key);}}
@@ -838,7 +854,7 @@ impl Actor {
                     if sid==self.selected_session {
                         self.program_event(id,name,&block["payload"]);
                         if matches!(name,"title_changed"|"process_changed"|"program_status_changed"|"program_status_removed"|"child_exited") {self.publish();}
-                    } else if name=="title_changed" && crate::activity::apply_title(&mut self.activity,sid,id,&block["payload"]) {
+                    } else if name=="title_changed" && (crate::activity::apply_title(&mut self.activity,sid,id,&block["payload"]) || pane_title) {
                         self.activity_dirty=true;self.publish();
                     }
                 }
@@ -1654,7 +1670,7 @@ fn preview_task(endpoint: Endpoint, session: String, ids: Vec<String>) -> Previe
     })
 }
 // Executable identifiers and a display directory cross JNI; never command arguments or user IDs.
-fn program_candidates(process: &Value, status: &Value) -> Value {
+pub(crate) fn program_candidates(process: &Value, status: &Value) -> Value {
     let foreground = &process["foreground"];
     let mut names: Vec<String> = Vec::new();
     let mut add = |value: &Value| {
@@ -1883,7 +1899,7 @@ fn frame_value(frame: &Frame) -> Value {
 #[cfg(test)]
 mod tests {
     fn navigation_actor()->Actor {
-        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
+        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
         Actor::new(shared,Arc::new(crate::updates::Updates::default()))
     }
     #[test] fn navigation_intent_is_published_only_for_accepted_navigation() {
@@ -1960,7 +1976,7 @@ mod tests {
     }
     #[test]
     fn pane_layout_preserves_nested_window_rects_and_floating_layers() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         let blocks=|ids:&[&str]|ids.iter().map(|id|json!({"block_id":id,"creator_name":"com.superlogical.terminal"})).collect::<Vec<_>>();
         actor.set_view(&json!({"windows":[{"window_id":"w","layers":[
@@ -1978,6 +1994,21 @@ mod tests {
         assert_eq!(layout[3],json!({"id":"d","rect":[0.1,0.1,0.5,0.5],"layer":1,"floating":true}));
     }
     #[test]
+    fn home_pane_list_republishes_only_when_pane_info_changes() {
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let mut actor=Actor::new(shared.clone(),Arc::new(crate::updates::Updates::default()));
+        actor.activity_panes=json!([{"session":{"session_id":"s"},"block":{"block_id":"b"},"info":{"block":"b","title":"zsh"}},{"session":{"session_id":"s"},"block":{"block_id":"gone"}}]);
+        actor.activity_dirty=true;actor.publish();
+        let first=shared.lock().unwrap().panes.clone();
+        assert_eq!(*first,json!([{"block":"b","title":"zsh"}]));
+        actor.activity_dirty=true;actor.publish();
+        assert!(Arc::ptr_eq(&first,&shared.lock().unwrap().panes));
+        assert!(!crate::activity::apply_pane_title(&mut actor.activity_panes,"s","b",&json!({"title":"⠋ zsh"})));
+        assert!(crate::activity::apply_pane_title(&mut actor.activity_panes,"s","b",&json!({"title":"vim"})));
+        actor.activity_dirty=true;actor.publish();
+        assert_eq!(shared.lock().unwrap().panes[0]["title"],"vim");
+    }
+    #[test]
     fn pane_layout_ignores_unknown_ids_and_invalid_leaves() {
         let ids=BTreeSet::from(["a"]);let mut out=Vec::new();
         for node in [Value::Null,json!({}),json!({"block_id":"other","rect":[0,0,1,1]}),
@@ -1989,7 +2020,7 @@ mod tests {
     }
     #[test]
     fn layout_only_changes_keep_the_selected_pane_and_program_metadata() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         let view=|rect:Value|json!({"windows":[{"window_id":"w","layers":[{"kind":"tiled",
             "blocks":[{"block_id":"a","creator_name":"com.superlogical.terminal"}],"layout":{"block_id":"a","rect":rect}}]}]});
@@ -2014,7 +2045,7 @@ mod tests {
     }
     #[test]
     fn split_rejects_stale_targets_and_invalid_direction_before_starting_creation() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         actor.phase="connected".into();actor.selected_session="s".into();actor.selected_block="b".into();
         actor.windows=json!([{"id":"w","blocks":[{"id":"b"}]}]);
@@ -2970,7 +3001,7 @@ while True:
     #[test]
     #[ignore = "host metadata benchmark; run with --ignored --nocapture"]
     fn activity_metadata_publish_benchmark() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared.clone(),Arc::new(crate::updates::Updates::default()));
         actor.activity=json!((0..256).map(|n|json!({"session":format!("session:{n}"),"block":format!("block:{n}"),"id":"","state":"working","app":"codex","owner":"codex","title":"A reported task title","message":"Work is continuing on this task.","updatedAt":"2026-11-02T00:00:00Z"})).collect::<Vec<_>>());
         for open in [false,true] {
@@ -2981,7 +3012,7 @@ while True:
     }
 
     #[test] fn background_monitor_is_read_only_and_publishes_activity_without_a_terminal() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared.clone(),Arc::new(crate::updates::Updates::default()));
         let runtime=tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         runtime.block_on(actor.command(json!({"type":"monitor"}))).unwrap();
@@ -2998,7 +3029,7 @@ while True:
     }
 
     #[test] fn hidden_activity_is_shared_for_focus_policy_without_recopied_snapshots() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared.clone(),Arc::new(crate::updates::Updates::default()));
         actor.activity=json!([{"title":"Cached task"}]);actor.publish();
         let published=||{let shared=shared.lock().unwrap();let mut value:Value=serde_json::from_str(&shared.json).unwrap();value["activity"]=shared.activity.as_ref().clone();value};
@@ -3010,7 +3041,7 @@ while True:
     }
 
     #[test] fn stale_or_hidden_take_and_resize_commands_cannot_target_the_new_pane() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         actor.phase="connected".into();actor.selected_session="s".into();actor.selected_block="b".into();actor.navigation_id=2;
         let runtime=tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
@@ -3028,7 +3059,7 @@ while True:
     }
 
     #[test] fn server_progress_events_update_background_tabs_and_activity_and_clear_on_recovery() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared.clone(),Arc::new(crate::updates::Updates::default()));
         actor.selected_session="s".into();actor.windows=json!([{"blocks":[{"id":"a"},{"id":"b"}]}]);
         actor.activity_panes=json!([{"session":{"session_id":"s","label":"Session"},"window":{"window_id":"w","label":"Tab"},"block":{"block_id":"b","label":"cargo"}}]);
@@ -3043,7 +3074,7 @@ while True:
     }
 
     #[test] fn semantic_copy_is_local_and_uses_the_frozen_viewport_and_target() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         actor.visible=true;actor.paused=false;actor.phase="reconnecting".into();actor.selected_session="s".into();actor.selected_block="b".into();actor.connection_epoch=2;actor.navigation_id=3;
         let mut terminal=rex_core::ghostty::Terminal::new(30,4).unwrap();
@@ -3062,7 +3093,7 @@ while True:
     }
 
     #[test] fn prompt_navigation_is_local_and_rejects_stale_targets_while_disconnected() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         actor.visible=true;actor.paused=false;actor.phase="preview".into();actor.selected_session="s".into();actor.selected_block="b".into();actor.connection_epoch=2;actor.navigation_id=3;
         let mut terminal=rex_core::ghostty::Terminal::new(30,4).unwrap();
@@ -3081,7 +3112,7 @@ while True:
     }
 
     #[test] fn osc52_updates_publish_once_with_the_source_pane_and_epoch() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared.clone(),Arc::new(crate::updates::Updates::default()));
         actor.selected_block="pane-a".into();actor.connection_epoch=2;actor.navigation_id=3;
         let mut terminal=rex_core::ghostty::Terminal::new(30,6).unwrap();let mut replica=Replica::new(42);
@@ -3095,7 +3126,7 @@ while True:
     }
 
     #[test] fn delayed_resize_apcs_cannot_revoke_canonical_ownership() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         actor.controlled=true;actor.replica=Some(Replica::new(1));
         actor.replica.as_mut().unwrap().events.push(json!({"type":"resize","owner":"previous-client"}));
@@ -3104,7 +3135,7 @@ while True:
         actor.update_apcs();assert!(!actor.controlled);
     }
     #[test] fn unowned_layout_resize_is_quiet_but_unowned_typing_is_rejected() {
-        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
+        let shared=Arc::new(Mutex::new(Shared{revision:0,json:String::new(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default(),activity:Arc::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         let runtime=tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         runtime.block_on(actor.command(json!({"type":"resize","columns":40,"rows":30}))).unwrap();
@@ -3120,7 +3151,7 @@ while True:
     }
 
     #[test] fn route_handoffs_preserve_live_connections_until_io_fails() {
-        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
+        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         actor.endpoint=Some(Endpoint::new("https://example.invalid",Duration::from_secs(10)).unwrap());
         actor.selected_session="s".into();actor.selected_block="b".into();actor.phase="connected".into();actor.controlled=true;actor.connection_epoch=7;
@@ -3137,7 +3168,7 @@ while True:
     }
 
     #[test] fn losing_network_cancels_a_pending_handshake_and_preserves_the_target() {
-        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
+        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         actor.endpoint=Some(Endpoint::new("https://example.invalid",Duration::from_secs(10)).unwrap());actor.selected_session="s".into();actor.selected_block="b".into();
         actor.connect_task=Some(Box::pin(pending()));actor.phase="connecting".into();
@@ -3149,7 +3180,7 @@ while True:
     }
 
     #[test] fn reordering_windows_preserves_program_metadata() {
-        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
+        let shared=Arc::new(Mutex::new(Shared {revision:0,json:String::new(),activity:Arc::default(),panes:Arc::default(),pending_previews:BTreeMap::new(),frame:None,key:String::new(),wire:crate::updates::WireBase::default()}));
         let mut actor=Actor::new(shared,Arc::new(crate::updates::Updates::default()));
         let window=|id:&str|json!({"window_id":id,"label":id,"layers":[{"blocks":[{"block_id":id,"creator_name":"com.superlogical.terminal"}]}]});
         actor.set_view(&json!({"windows":[window("a"),window("b")]}));

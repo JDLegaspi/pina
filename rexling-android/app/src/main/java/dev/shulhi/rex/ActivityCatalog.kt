@@ -1,7 +1,6 @@
 package dev.shulhi.rex
 
 import org.json.JSONObject
-import java.time.Instant
 
 enum class ActivityState(val wire: String,val label: String,val priority: Int) {
     BLOCKED("blocked","Needs you",0),ERROR("error","Failed",1),DONE("done","Finished",3),WORKING("working","Working",2),IDLE("idle","Idle",4)
@@ -15,7 +14,7 @@ data class ActivityRecord(val session: String,val sessionLabel: String,val windo
     val key: String =listOf(session,block,id).joinToString("") {"${it.length}:$it"}
     val label: String get()=program.paneTitle(blockLabel,title)
     val context: String get()=listOf(sessionLabel,windowLabel.takeUnless {generatedWindow.matches(it)}.orEmpty(),if(progressOnly) "" else id).filter {it.isNotBlank()}.joinToString(" · ")
-    val timestamp: Long =runCatching {Instant.parse(updated).toEpochMilli()}.getOrDefault(0)
+    val timestamp: Long =AgentSessions.parseInstant(updated)?.toEpochMilli() ?: 0
     val stateLabel: String get()=if(progressOnly && terminalProgress!=null) terminalProgress.label else if(state==ActivityState.BLOCKED) when(kind) {"permission"->"Approval";"question"->"Question";"auth"->"Sign in";else->state.label} else state.label
     companion object {
         private val generatedWindow=Regex("(?i)window(?:[ \t_-]+)[0-9a-f]{6,}(?:-[0-9a-f]+)*")

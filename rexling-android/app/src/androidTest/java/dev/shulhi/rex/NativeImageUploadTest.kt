@@ -63,52 +63,52 @@ class NativeImageUploadTest {
             }
             server.start(InetAddress.getByName("127.0.0.1"),0)
         }
-        fun target()=ImageTarget("fixture","http://127.0.0.1:${server.port}","session:original","block:original",1,1,ProgramKind.CODEX,"Original pane")
+        fun target()=UploadTarget("fixture","http://127.0.0.1:${server.port}","session:original","block:original",1,1,ProgramKind.CODEX,"Original pane")
         override fun close() {server.shutdown()}
     }
     @Test fun nativePickerUploadWaitsForConfirmationShowsSuccessThenDisappearsWithoutNotice() {
-        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:ImageUploads;var released=0
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:FileUploads;var released=0
         Peer().use {peer->try {
-            main {uploads=ImageUploads(instrumentation.targetContext,scope);assertTrue(uploads.start(TestImageProvider.uri,peer.target()) {released++})}
-            assertTrue(peer.eof.await(10,TimeUnit.SECONDS));await {uploads.state?.phase==ImagePhase.FINISHING}
+            main {uploads=FileUploads(instrumentation.targetContext,scope);assertTrue(uploads.start(listOf(TestImageProvider.uri),peer.target()) {released++})}
+            assertTrue(peer.eof.await(10,TimeUnit.SECONDS));await {uploads.state?.phase==UploadPhase.FINISHING}
             assertArrayEquals(TestImageProvider.png,synchronized(peer.bytes) {peer.bytes.toByteArray()})
             assertEquals("session:original",peer.target!!.getString("session_id"));assertEquals("block:original",peer.target!!.getString("block_id"))
             assertEquals(TestImageProvider.png.size.toLong(),peer.target!!.getJSONObject("args").getLong("size"))
             peer.data!!.close(1000,"")
-            await {uploads.state?.phase==ImagePhase.SUCCESS}
+            await {uploads.state?.phase==UploadPhase.SUCCESS}
             main {assertEquals("",uploads.notice)}
             await {uploads.state==null}
             main {
                 assertEquals(1,released);assertEquals("",uploads.notice);assertFalse(uploads.retryable)
-                assertTrue(uploads.start(TestImageProvider.uri,peer.target()))
+                assertTrue(uploads.start(listOf(TestImageProvider.uri),peer.target()))
                 uploads.cancel()
             }
         } finally {main {uploads.close();scope.cancel()}}}
     }
     @Test fun lostFinalConfirmationDisablesRetry() {
-        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:ImageUploads
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:FileUploads
         Peer().use {peer->try {
-            main {uploads=ImageUploads(instrumentation.targetContext,scope);uploads.start(TestImageProvider.uri,peer.target())}
-            assertTrue(peer.eof.await(10,TimeUnit.SECONDS));peer.server.shutdown();await {uploads.state?.phase==ImagePhase.FAILED}
+            main {uploads=FileUploads(instrumentation.targetContext,scope);uploads.start(listOf(TestImageProvider.uri),peer.target())}
+            assertTrue(peer.eof.await(10,TimeUnit.SECONDS));peer.server.shutdown();await {uploads.state?.phase==UploadPhase.FAILED}
             main {assertFalse(uploads.retryable);assertTrue(uploads.state!!.error.contains("Check the original pane"))}
         } finally {main {uploads.close();scope.cancel()}}}
     }
     @Test fun cancelClosesNativeUploadWhileWaitingForHandshake() {
-        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:ImageUploads
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:FileUploads
         Peer(welcome=false).use {peer->try {
-            main {uploads=ImageUploads(instrumentation.targetContext,scope);uploads.start(TestImageProvider.uri,peer.target())}
-            assertTrue(peer.opened.await(10,TimeUnit.SECONDS));main {assertEquals(ImagePhase.PREPARING,uploads.state?.phase);uploads.cancel();assertNull(uploads.state)}
+            main {uploads=FileUploads(instrumentation.targetContext,scope);uploads.start(listOf(TestImageProvider.uri),peer.target())}
+            assertTrue(peer.opened.await(10,TimeUnit.SECONDS));main {assertEquals(UploadPhase.PREPARING,uploads.state?.phase);uploads.cancel();assertNull(uploads.state)}
             assertTrue(peer.closed.await(5,TimeUnit.SECONDS));assertEquals(1L,peer.eof.count)
         } finally {main {uploads.close();scope.cancel()}}}
     }
     @Test fun unsupportedServerExplainsUpgradeWithoutAnotherUploadBackend() {
-        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:ImageUploads
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate);lateinit var uploads:FileUploads
         try {
             main {
-                uploads=ImageUploads(instrumentation.targetContext,scope,RexUploadBackend {_,_,_->RexUploadResult("unsupported","")})
-                uploads.start(TestImageProvider.uri,ImageTarget("fixture","https://fixture","s","b",1,1,ProgramKind.CODEX,"Fixture"))
+                uploads=FileUploads(instrumentation.targetContext,scope,RexUploadBackend {_,_,_->RexUploadResult("unsupported","")})
+                uploads.start(listOf(TestImageProvider.uri),UploadTarget("fixture","https://fixture","s","b",1,1,ProgramKind.CODEX,"Fixture"))
             }
-            await {uploads.state?.phase==ImagePhase.FAILED}
+            await {uploads.state?.phase==UploadPhase.FAILED}
             main {assertTrue(uploads.state!!.error.contains("Update the Rex server"))}
         } finally {main {uploads.close();scope.cancel()}}
     }
@@ -119,7 +119,7 @@ class NativeImageUploadTest {
         file.writeBytes(TestImageProvider.png+ByteArray(512*1024))
         val updates=mutableListOf<Pair<String,Float>>();var result:RexUploadResult?=null
         Peer(chunkDelayMs=15).use {peer->try {
-            main {scope.launch {result=RexImageUpload().upload(peer.target(),StagedImage(file,"fixture.png")) {phase,fraction->updates+=phase to fraction}}}
+            main {scope.launch {result=RexFileUpload().upload(peer.target(),listOf(StagedFile(file,"fixture.png"))) {phase,fraction,_->updates+=phase to fraction}}}
             assertTrue(peer.eof.await(10,TimeUnit.SECONDS))
             main {
                 val intermediate=updates.filter {it.first=="sending" && it.second>0f && it.second<1f}

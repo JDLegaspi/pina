@@ -3,7 +3,7 @@
   "preparation": "Checkerboard extracted with built-in image_gen, followed by alpha cleanup. Real transparency retained. Android supplies the existing white adaptive background; foreground keeps square aspect ratio and is shifted downward to fill the mask bottom.",
   "source_sha256": "e4ba37c7b8236405acb53a7de3b51021f7d30bed9ea9215699cbfefcd6a83f01",
   "foreground_sha256": "b2fd3875ffb7d1c687f98a383ff8cf33619b9461fa8e01de77e95701fe2767c4",
-  "foreground": "app/src/main/res/drawable-nodpi/rexlink_dinosaur.png",
+  "foreground": "artwork/rexlink/foreground.png",
   "notification": "app/src/main/res/drawable/ic_notification.xml",
   "tool": "built-in image_gen",
   "prompt": "artwork/rexlink/preparation-prompt.txt",

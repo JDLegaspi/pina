@@ -822,6 +822,7 @@ dependencies = [
  "crossterm",
  "futures-util",
  "percent-encoding",
+ "rexling-core",
  "rustls",
  "serde_json",
  "tokio",

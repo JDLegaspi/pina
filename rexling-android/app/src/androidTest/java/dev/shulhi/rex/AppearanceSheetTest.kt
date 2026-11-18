@@ -27,7 +27,7 @@ class AppearanceSheetTest {
         var chosen="";var mode=Appearance.SYSTEM
         ui.setContent {MaterialTheme {AppearanceSheet(mode,themes,ThemeCatalog.defaults[1],ThemeCatalog.defaults[0],{mode=it},{chosen=it},onClose={})}}
         ui.onNodeWithText("Dark theme").performClick()
-        ui.onNodeWithContentDescription("Theme Rexling Default").assertIsSelected()
+        ui.onNodeWithContentDescription("Theme Pina Default").assertIsSelected()
         ui.onNodeWithContentDescription("Theme Abyssal Trench").performClick()
         ui.runOnIdle {assertEquals("abyssal-trench",chosen);assertEquals(Appearance.SYSTEM,mode)}
     }
@@ -106,7 +106,7 @@ class AppearanceSheetTest {
     }
     @Test fun themedSheetsRenderInLightAndDark() {
         val selected=mutableStateOf(themes.first {it.id=="abyssal-trench"})
-        ui.setContent {val theme=selected.value;MaterialTheme(colorScheme=(if(theme.terminal.dark) darkColorScheme() else lightColorScheme()).withPreset(theme)) {
+        ui.setContent {val theme=selected.value;PinaTheme(theme.terminal.dark,theme.terminal) {
             Surface(Modifier.fillMaxSize()) {AppearanceSheet(Appearance.SYSTEM,themes,themes.first {it.id=="alpine-milk"},themes.first {it.id=="abyssal-trench"},{},{},onClose={})}
         }}
         for(id in listOf("abyssal-trench","alpine-milk")) {

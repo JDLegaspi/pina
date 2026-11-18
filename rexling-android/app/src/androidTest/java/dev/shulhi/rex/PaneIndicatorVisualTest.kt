@@ -24,7 +24,7 @@ class PaneIndicatorVisualTest {
     @Test fun expandingTransferRendersInBothThemesAtAFixedSize() {
         var progress by mutableFloatStateOf(0f)
         var dark by mutableStateOf(false)
-        ui.setContent {RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+        ui.setContent {PinaTheme(dark) {
             Surface {Box(Modifier.size(180.dp,40.dp).testTag("Indicator preview"),contentAlignment=Alignment.Center) {
                 PanePositionIndicator(0,3,{progress})
             }}

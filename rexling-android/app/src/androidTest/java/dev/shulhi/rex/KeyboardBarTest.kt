@@ -300,7 +300,7 @@ class KeyboardBarTest {
     }
     @Test fun joystickOverlaysTheUnchangedRowInBothThemes() {
         val dark=mutableStateOf(false)
-        ui.setContent {RexTheme(dark.value,ThemeCatalog.defaults[if(dark.value) 0 else 1]) {
+        ui.setContent {PinaTheme(dark.value) {
             Box(Modifier.fillMaxSize().padding(bottom=80.dp),contentAlignment=Alignment.BottomCenter) {
                 Box(Modifier.width(360.dp).testTag("Keyboard dock")) {
                     KeyboardBar(true,true,false,false,false,true,{},{},{},{},{},{sent+=it},onKeyboard={})

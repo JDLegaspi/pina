@@ -11,9 +11,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
@@ -23,50 +26,51 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
-internal val UploadPillText=SettingsType.row.copy(fontSize=12.sp,lineHeight=18.sp,letterSpacing=0.sp,fontWeight=FontWeight.SemiBold)
+internal val UploadPillText=PinaType.footnote.copy(fontWeight=FontWeight.SemiBold)
 
-@Composable internal fun ImageUploadOverlay(status: ImageUploadStatus,onRetry: ()->Unit,onCancel: ()->Unit,modifier: Modifier=Modifier,retryable: Boolean=true,hazeState: dev.chrisbanes.haze.HazeState?=null) {
-    val localHaze=remember {dev.chrisbanes.haze.HazeState()}
-    val scheme=MaterialTheme.colorScheme
-    val failed=status.phase==ImagePhase.FAILED
-    val success=status.phase==ImagePhase.SUCCESS
-    val uploading=status.phase==ImagePhase.UPLOADING && status.progress>0f
+internal fun uploadTitle(status: UploadStatus): String = when(status.phase) {
+    UploadPhase.PREPARING->if(status.count>1) "Preparing ${status.count} files" else "Preparing ${status.names.firstOrNull() ?: "file"}"
+    UploadPhase.UPLOADING->if(status.count>1) "Uploading ${status.current+1} of ${status.count}" else "Uploading ${status.names.firstOrNull() ?: "file"}"
+    UploadPhase.FINISHING->"Finishing upload"
+    UploadPhase.SUCCESS->if(status.count>1) "${status.count} files uploaded" else "${status.names.firstOrNull() ?: "File"} uploaded"
+    UploadPhase.FAILED->"Upload failed"
+}
+
+@Composable internal fun UploadOverlay(status: UploadStatus,onRetry: ()->Unit,onCancel: ()->Unit,modifier: Modifier=Modifier,retryable: Boolean=true) {
+    val colors=LocalPinaColors.current
+    val failed=status.phase==UploadPhase.FAILED
+    val success=status.phase==UploadPhase.SUCCESS
+    val uploading=status.phase==UploadPhase.UPLOADING && status.progress>0f
     val percent=(status.progress.coerceIn(0f,1f)*100).roundToInt()
-    val green=Color(0xff27884f)
-    val ink=Color(0xff202a3c)
-    val container by animateColorAsState(if(success) Color(0xffdef2e5) else Color(0xffe5edff),tween(200),label="Upload success fill")
-    val accent by animateColorAsState(if(success) green else scheme.primary,tween(200),label="Upload success ring")
-    val titleColor by animateColorAsState(if(success) Color(0xff1e7143) else ink,tween(200),label="Upload success text")
-    TransferNoticeSurface(modifier,hazeState ?: localHaze,container,ink,"Image upload") {
+    val ink=colors.label
+    val container by animateColorAsState(if(success) colors.green.copy(alpha=.16f).compositeOver(colors.secondaryGroupedBackground) else colors.secondaryGroupedBackground,tween(200),label="Upload success fill")
+    val accent by animateColorAsState(if(success) colors.green else colors.tint,tween(200),label="Upload success ring")
+    val shape=RoundedCornerShape(20.dp)
+    Surface(modifier.widthIn(max=280.dp).shadow(12.dp,shape,ambientColor=Color.Black.copy(alpha=.18f),spotColor=Color.Black.copy(alpha=.18f))
+        .border(.5.dp,colors.separator.copy(alpha=.6f),shape).semantics {paneTitle="File upload"},shape=shape,color=container,contentColor=ink) {
         Column(Modifier.animateContentSize(spring(dampingRatio=.9f,stiffness=500f),alignment=Alignment.BottomEnd)) {
             Row(Modifier.then(if(failed) Modifier.fillMaxWidth() else Modifier)
-                .padding(start=8.dp,end=if(success) 8.dp else 2.dp).heightIn(min=32.dp),
-                verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                if(failed) ChromeSymbol(ChromeIcon.IMAGE,Modifier.size(14.dp),Color(0xffb3261e))
+                .padding(start=10.dp,end=if(success) 10.dp else 2.dp).heightIn(min=34.dp),
+                verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)) {
+                if(failed) ChromeSymbol(ChromeIcon.FILE,Modifier.size(15.dp),colors.red)
                 else UploadRing(status.progress,indeterminate=!uploading && !success,color=accent,success=success)
-                AnimatedContent(when(status.phase) {
-                    ImagePhase.PREPARING->"Preparing image"
-                    ImagePhase.UPLOADING->"Uploading image"
-                    ImagePhase.FINISHING->"Finishing upload"
-                    ImagePhase.SUCCESS->"Image uploaded"
-                    ImagePhase.FAILED->"Upload failed"
-                },Modifier.weight(1f,fill=failed),transitionSpec={uploadTextTransition()},label="Upload label") {label->
+                AnimatedContent(uploadTitle(status),Modifier.weight(1f,fill=failed),transitionSpec={uploadTextTransition()},label="Upload label") {label->
                     val softness by transition.animateFloat(transitionSpec={tween(200)},label="Upload label softness") {
                         if(it==EnterExitState.Visible) 0f else 2.5f
                     }
-                    Text(label,Modifier.blur(softness.dp,BlurredEdgeTreatment.Unbounded),style=UploadPillText,
-                        color=titleColor,maxLines=1,overflow=TextOverflow.Ellipsis)
+                    Text(label,Modifier.widthIn(max=180.dp).blur(softness.dp,BlurredEdgeTreatment.Unbounded),style=UploadPillText,
+                        color=ink,maxLines=1,overflow=TextOverflow.MiddleEllipsis)
                 }
                 if(uploading) UploadPercentage(percent)
                 if(!success) IconButton(onClick=onCancel,modifier=Modifier.size(32.dp).semantics {
-                    contentDescription=if(failed) "Dismiss upload error" else "Cancel image upload"
-                }) {ChromeSymbol(ChromeIcon.CLOSE,Modifier.size(13.dp),ink.copy(alpha=.6f))}
+                    contentDescription=if(failed) "Dismiss upload error" else "Cancel upload"
+                }) {ChromeSymbol(ChromeIcon.CLOSE,Modifier.size(13.dp),colors.secondaryLabel)}
             }
             if(failed) {
-                Text(status.error,Modifier.padding(start=8.dp,end=8.dp,bottom=if(retryable) 0.dp else 8.dp),
-                    style=SettingsType.detail,color=ink.copy(alpha=.75f))
+                Text(status.error,Modifier.padding(start=10.dp,end=10.dp,bottom=if(retryable) 0.dp else 10.dp),
+                    style=PinaType.footnote,color=colors.secondaryLabel)
                 if(retryable) TextButton(onClick=onRetry,modifier=Modifier.align(Alignment.End).padding(end=4.dp,bottom=2.dp),
-                    colors=ButtonDefaults.textButtonColors(contentColor=scheme.primary)) {Text("Retry",style=SettingsType.section)}
+                    colors=ButtonDefaults.textButtonColors(contentColor=colors.tint)) {Text("Retry",style=PinaType.subheadline.copy(fontWeight=FontWeight.SemiBold))}
             }
         }
     }

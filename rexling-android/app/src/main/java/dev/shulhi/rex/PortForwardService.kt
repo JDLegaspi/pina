@@ -86,8 +86,8 @@ class PortForwardService: Service() {
     private fun notification(): Notification {
         val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop=PendingIntent.getService(this,1,Intent(this,PortForwardService::class.java).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        return Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Rexling port forwarding")
-            .setContentText("${workers.size} forwards · tap Rexling to manage").setContentIntent(open).setOngoing(true)
+        return Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Pina port forwarding")
+            .setContentText("${workers.size} forwards · tap Pina to manage").setContentIntent(open).setOngoing(true)
             .addAction(Notification.Action.Builder(null,"Stop all",stop).build()).build()
     }
     private fun ongoing() {notifications.notify(NOTIFICATION,notification())}
@@ -103,9 +103,9 @@ class PortForwardService: Service() {
     }
     override fun onBind(intent: Intent?): IBinder?=null
     companion object {
-        const val ADD="dev.shulhi.rex.forward.ADD"
-        const val CLOSE="dev.shulhi.rex.forward.CLOSE"
-        const val STOP="dev.shulhi.rex.forward.STOP"
+        const val ADD="dev.jdlegaspi.pina.forward.ADD"
+        const val CLOSE="dev.jdlegaspi.pina.forward.CLOSE"
+        const val STOP="dev.jdlegaspi.pina.forward.STOP"
         private const val CHANNEL="port_forwards"
         private const val NOTIFICATION=4401
     }

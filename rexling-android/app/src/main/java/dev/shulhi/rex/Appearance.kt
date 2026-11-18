@@ -2,7 +2,10 @@ package dev.shulhi.rex
 
 import androidx.compose.runtime.staticCompositionLocalOf
 
-enum class Appearance { SYSTEM, DARK, LIGHT }
+enum class Appearance(val label: String) {
+    SYSTEM("System"), DARK("Dark"), LIGHT("Light");
+    fun isDark(systemDark: Boolean): Boolean = when(this) { SYSTEM -> systemDark; DARK -> true; LIGHT -> false }
+}
 
 data class TerminalPalette(val dark: Boolean, val background: Int, val foreground: Int, val accent: Int, val ansi: List<Int>, val cursorText: Int = 0xffffffff.toInt()) {
     fun foreground(cell: TerminalCell): Int = when {

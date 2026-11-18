@@ -75,7 +75,7 @@ import kotlinx.coroutines.delay
         val owner=PortForwards.items.firstOrNull {it.id==conflict.owner}
         AlertDialog(onDismissRequest={PortForwards.cancelConflict()},title={Text("Phone port ${target.localPort} is unavailable",style=SettingsType.title)},
             text={Text(if(owner!=null) "${owner.server} is forwarding ${owner.target} on this port. Choose another port, or stop that forward and reuse the port."
-                else "This port is reserved or in use by another app. Rexling can choose an available phone port.",style=SettingsType.body)},
+                else "This port is reserved or in use by another app. Pina can choose an available phone port.",style=SettingsType.body)},
             confirmButton={Column(horizontalAlignment=Alignment.End) {
                 TextButton(onClick={PortForwards.resolve(context,false)}) {Text("Choose another port")}
                 if(owner!=null) TextButton(onClick={PortForwards.resolve(context,true)}) {Text("Stop other forward & use port")}

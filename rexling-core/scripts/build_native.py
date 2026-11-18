@@ -81,7 +81,12 @@ def main():
         env["CXX_aarch64_linux_android"] = str(compiler) + "++"
         env["AR_aarch64_linux_android"] = str(compiler_root / "bin/llvm-ar")
         env["CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"] = str(compiler)
-        env["CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS"] = "-C link-arg=-Wl,-z,max-page-size=16384"
+        cargo_home = Path(env.get("CARGO_HOME") or Path.home() / ".cargo")
+        env["CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS"] = " ".join([
+            "-C link-arg=-Wl,-z,max-page-size=16384",
+            f"--remap-path-prefix={cargo_home}=/cargo",
+            f"--remap-path-prefix={ROOT.parent}=/src",
+        ])
     if not args.host_test:
         network = ROOT.parent / "rexling-network"
         network_prefix = ROOT / ".build/network-arm64"
@@ -90,7 +95,7 @@ def main():
         network_env.update({"GOOS":"android", "GOARCH":"arm64", "CGO_ENABLED":"1", "CC":str(compiler), "CGO_LDFLAGS":"-Wl,-z,max-page-size=16384"})
         run(["go", "build", "-mod=readonly", "-trimpath", "-buildmode=c-shared", "-ldflags=-s -w", "-o", network_prefix / "librex_network.so", "."], cwd=network, env=network_env)
         env["REXLING_NETWORK_PREFIX"] = str(network_prefix)
-    run(command, cwd=source_root, env=env)
+    run(command, cwd=source_root, env={**env, "GIT_CEILING_DIRECTORIES": str(source_root.parent)})
     env["GHOSTTY_PREFIX"] = str(prefix)
     if args.host_test:
         run([cargo, "test", "--locked", "--workspace", "--all-features", "--manifest-path", ROOT / "Cargo.toml"], cwd=ROOT, env=env)

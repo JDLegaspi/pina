@@ -20,7 +20,7 @@ class ServerEditorCompactTest {
         runBlocking {assertNull(NetworkSettings.importKey(endpoint,key,""))}
         var dark by mutableStateOf(false)
         try {
-            ui.setContent {RexTheme(dark,ThemeCatalog.defaults[if(dark) 0 else 1]) {
+            ui.setContent {PinaTheme(dark) {
                 ServerEditor(ServerProfile.create("Shipyard 2",endpoint),{}, {_,_,_->null})
             }}
             for(value in listOf(false,true)) {

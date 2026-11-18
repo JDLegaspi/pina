@@ -2,7 +2,7 @@
 use futures_util::{SinkExt, StreamExt};
 use rexling_core::{
     transport::{CONTROL, Endpoint},
-    upload::{self, BYTES, Phase, Request},
+    upload::{self, BYTES, Phase, Request, UploadFile},
 };
 use serde_json::{Value, json};
 use std::{
@@ -80,10 +80,20 @@ async fn run(mode: &'static str) -> (Phase, String, Vec<(Phase, u64, u64)>) {
         assert_eq!(attach["method"], "session.attach");
         assert_eq!(attach["payload"]["session_id"], "session:original");
         reply(&mut control, &attach, json!({"view":{}})).await;
+        let files = if mode == "batch" { 2 } else { 1 };
+        let mut cumulative = 0;
+        for index in 0..files {
         let begin = request(&mut control).await;
         assert_eq!(begin["method"], "com.superlogical.terminal.upload_begin");
         assert_eq!(begin["payload"]["block_id"], "block:original");
         assert_eq!(begin["payload"]["args"]["size"], expected.len());
+        if mode == "batch" {
+            assert_eq!(begin["payload"]["args"]["batch"], "batch:fixture");
+            assert_eq!(begin["payload"]["args"]["index"], index);
+            assert_eq!(begin["payload"]["args"]["count"], 2);
+        } else {
+            assert!(begin["payload"]["args"].get("batch").is_none());
+        }
         if mode == "missing" || mode == "limit" {
             control.send(Message::Text(json!({"type":"response","id":begin["id"],"error":{"code":if mode=="missing" {"method_not_found"}else{"too_large"},"message":"fixture rejection"}}).to_string().into())).await.unwrap();
             return;
@@ -123,7 +133,7 @@ async fn run(mode: &'static str) -> (Phase, String, Vec<(Phase, u64, u64)>) {
                     }
                     assert!(bytes.len() <= 16384);
                     received.extend_from_slice(&bytes);
-                    server_received.store(received.len() as u64, Ordering::SeqCst);
+                    server_received.store(cumulative + received.len() as u64, Ordering::SeqCst);
                     if mode == "slow" {
                         tokio::time::sleep(Duration::from_millis(15)).await;
                     }
@@ -132,6 +142,7 @@ async fn run(mode: &'static str) -> (Phase, String, Vec<(Phase, u64, u64)>) {
             }
         }
         assert_eq!(received, expected);
+        cumulative += received.len() as u64;
         if mode == "lost" {
             return;
         }
@@ -147,6 +158,7 @@ async fn run(mode: &'static str) -> (Phase, String, Vec<(Phase, u64, u64)>) {
             })))
             .await
             .unwrap();
+        }
     });
     let events = Arc::new(Mutex::new(Vec::new()));
     let observed = events.clone();
@@ -163,12 +175,22 @@ async fn run(mode: &'static str) -> (Phase, String, Vec<(Phase, u64, u64)>) {
             endpoint,
             session: "session:original",
             block: "block:original",
-            path: &path,
-            name: "image.png",
-            reference: "upload:00000000-0000-4000-8000-000000000001",
+            files: &[
+                UploadFile {
+                    path: &path,
+                    name: "notes with spaces.txt",
+                    reference: "upload:00000000-0000-4000-8000-000000000001",
+                },
+                UploadFile {
+                    path: &path,
+                    name: "second.pdf",
+                    reference: "upload:00000000-0000-4000-8000-000000000002",
+                },
+            ][..if mode == "batch" { 2 } else { 1 }],
+            batch: (mode == "batch").then_some("batch:fixture"),
         },
         cancel_rx,
-        move |p, s, t| {
+        move |p, s, t, _| {
             if p == Phase::Sending {
                 assert!(
                     s <= received_count.load(Ordering::SeqCst),
@@ -191,6 +213,14 @@ async fn streams_chunks_half_closes_and_waits_for_server_confirmation() {
     assert_eq!(phase, Phase::Done, "{error}");
     assert!(events.iter().any(|e| e.0 == Phase::Finishing));
     assert_eq!(events.last(), Some(&(Phase::Done, 70000, 70000)));
+}
+#[tokio::test]
+async fn batch_sends_every_file_over_one_control_connection() {
+    let (phase, error, events) = run("batch").await;
+    assert_eq!(phase, Phase::Done, "{error}");
+    let finishing = events.iter().position(|e| e.0 == Phase::Finishing).unwrap();
+    assert!(events[..finishing].iter().any(|e| e.0 == Phase::Sending && e.1 == 70000 && e.2 == 140000));
+    assert_eq!(events.last(), Some(&(Phase::Done, 140000, 140000)));
 }
 #[tokio::test]
 async fn older_servers_are_unsupported_before_reservation() {

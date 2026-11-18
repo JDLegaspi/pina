@@ -17,24 +17,24 @@ import androidx.compose.ui.unit.dp
     shortcutGesture: ControlShortcutGesture=ControlShortcutGesture.HOLD,onShortcutGesture: (ControlShortcutGesture)->Unit={},onNeovim: ()->Unit={},
     arrowJoystickEnabled: Boolean=true,onArrowJoystick: (Boolean)->Unit={},codexTitleAttention: Boolean=false,onCodexTitleAttention: (Boolean)->Unit={},
     minimizeFloatingPanes: Boolean=false,onMinimizeFloatingPanes: (Boolean)->Unit={},onNetwork: ()->Unit={},
-    keepScreenAwake: KeepScreenAwake=KeepScreenAwake.SYSTEM,onKeepScreenAwake: (KeepScreenAwake)->Unit={},onToolbar: ()->Unit={},onControlItems: ()->Unit={},onSshKeys: ()->Unit={},hazeState: dev.chrisbanes.haze.HazeState?=null) {
+    keepScreenAwake: KeepScreenAwake=KeepScreenAwake.SYSTEM,onKeepScreenAwake: (KeepScreenAwake)->Unit={},onToolbar: ()->Unit={},onControlItems: ()->Unit={},onSshKeys: ()->Unit={},onServers: (()->Unit)?=null,hazeState: dev.chrisbanes.haze.HazeState?=null) {
     ModalBottomSheet(onDismissRequest=onClose,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
         containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,tonalElevation=0.dp,dragHandle=null,contentWindowInsets={WindowInsets(0,0,0,0)}) {
-        Column(Modifier.drawerFrost(hazeState,BottomSheetDefaults.ExpandedShape).fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
+        Column(Modifier.sheetSurface().fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
             DrawerHandle()
             Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=16.dp,end=4.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text("Preferences",Modifier.weight(1f),style=SettingsType.row,fontWeight=FontWeight.Bold)
                 ChromeButton(ChromeIcon.CLOSE,"Close preferences",onClick=onClose)
             }
         Column(Modifier.fillMaxWidth().heightIn(max=600.dp).verticalScroll(rememberScrollState()).padding(horizontal=16.dp).padding(top=8.dp,bottom=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            SettingsSection("Display",compact=true) {
+            SettingsSection("Display") {
                 SettingsRow("Appearance","Themes and light or dark mode",SettingsGlyph.APPEARANCE,onAppearance)
                 SettingsDivider()
                 SettingsRow("Font size","Terminal text size",SettingsGlyph.FONT,onFont)
                 SettingsDivider()
                 Column(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp)) {
                     Text("Keep screen awake",style=SettingsType.row)
-                    Text("Only while Rexling is in the foreground. You can still lock the phone.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Only while Pina is in the foreground. You can still lock the phone.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     KeepScreenAwake.entries.forEach {mode->
                         Row(Modifier.fillMaxWidth().selectable(mode==keepScreenAwake,role=androidx.compose.ui.semantics.Role.RadioButton,onClick={onKeepScreenAwake(mode)}).padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
                             RadioButton(selected=mode==keepScreenAwake,onClick=null)
@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
                     }
                 }
             }
-            SettingsSection("Panes",compact=true) {
+            SettingsSection("Panes") {
                 Row(Modifier.fillMaxWidth().toggleable(minimizeFloatingPanes,role=androidx.compose.ui.semantics.Role.Switch,onValueChange=onMinimizeFloatingPanes)
                     .padding(horizontal=16.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)) {
@@ -56,7 +56,7 @@ import androidx.compose.ui.unit.dp
                     Switch(checked=minimizeFloatingPanes,onCheckedChange=null)
                 }
             }
-            SettingsSection("Keyboard",compact=true) {
+            SettingsSection("Keyboard") {
                 SettingsRow("Keyboard toolbar","Choose and arrange up to seven buttons",SettingsGlyph.COMMAND,onToolbar)
                 SettingsDivider()
                 Row(Modifier.fillMaxWidth().toggleable(arrowJoystickEnabled,role=androidx.compose.ui.semantics.Role.Switch,onValueChange=onArrowJoystick)
@@ -83,17 +83,21 @@ import androidx.compose.ui.unit.dp
                 SettingsDivider()
                 SettingsRow("Neovim shortcuts","Customize the floating key menu",SettingsGlyph.COMMAND,onNeovim)
             }
-            SettingsSection("Connections",compact=true) {
+            SettingsSection("Connections") {
+                onServers?.let {
+                    SettingsRow("Servers","Add, connect, or forget Rex servers",SettingsGlyph.SERVER,it)
+                    SettingsDivider()
+                }
                 SettingsRow("Network","Built-in Tailscale and control server",SettingsGlyph.NETWORK,onNetwork)
                 SettingsDivider()
                 SettingsRow("SSH keys","Save and reuse private keys across servers",SettingsGlyph.KEY,onSshKeys)
                 SettingsDivider()
                 SettingsRow("Background alerts","Task completions and attention alerts",SettingsGlyph.ALERTS,onAlerts)
             }
-            SettingsSection("Port forwarding",compact=true) {
+            SettingsSection("Port forwarding") {
                 Column(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=12.dp)) {
                     Text("When the phone port is in use",style=SettingsType.row)
-                    Text("Prefer the remote port number. Only Rexling forwards can be replaced.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Prefer the remote port number. Only Pina forwards can be replaced.",style=SettingsType.detail,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     PortConflictPolicy.entries.forEach {choice->
                         Row(Modifier.fillMaxWidth().selectable(PortForwards.policy==choice,role=androidx.compose.ui.semantics.Role.RadioButton,onClick={PortForwards.changePolicy(choice)}).padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
                             RadioButton(selected=PortForwards.policy==choice,onClick=null)
@@ -102,7 +106,7 @@ import androidx.compose.ui.unit.dp
                     }
                 }
             }
-            SettingsSection("Experimental",compact=true) {
+            SettingsSection("Experimental") {
                 Row(Modifier.fillMaxWidth().toggleable(value=codexTitleAttention,role=androidx.compose.ui.semantics.Role.Switch,onValueChange=onCodexTitleAttention)
                     .padding(horizontal=16.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)) {
@@ -112,8 +116,8 @@ import androidx.compose.ui.unit.dp
                     Switch(checked=codexTitleAttention,onCheckedChange=null)
                 }
             }
-            SettingsSection("App",compact=true) {
-                SettingsRow("About Rexling","Version, build and project information",SettingsGlyph.INFO,onAbout)
+            SettingsSection("App") {
+                SettingsRow("About Pina","Version, build and project information",SettingsGlyph.INFO,onAbout)
             }
         }
         }

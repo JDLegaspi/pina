@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("io.github.takahirom.roborazzi")
 }
 // SOURCE_DATE_EPOCH allows rebuilding an older release with its original UTC date.
 val buildInstant=providers.environmentVariable("SOURCE_DATE_EPOCH").orNull?.let {Instant.ofEpochSecond(it.toLong())} ?: Instant.now()
@@ -26,7 +27,7 @@ android {
     ndkVersion = "30.0.16248370"
     compileSdk { version = release(37) }
     defaultConfig {
-        applicationId = "dev.shulhi.rex"
+        applicationId = "dev.jdlegaspi.pina"
         minSdk = 28
         targetSdk = 37
         versionCode = 167
@@ -42,6 +43,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     packaging { jniLibs { useLegacyPackaging = false } }
+    testOptions { unitTests { isIncludeAndroidResources = true } }
     buildTypes {
         getByName("debug") {
             // A disposable package for on-device rendering tests; never touches the installed app's settings.
@@ -75,6 +77,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
@@ -88,6 +92,11 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.json:json:20250517")
+    testImplementation(platform("androidx.compose:compose-bom:2025.08.01"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.79.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.79.0")
 }
 val buildRust by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)
@@ -98,6 +107,7 @@ val buildRust by tasks.registering(Exec::class) {
     inputs.file(rootProject.file("scripts/build_native.py"))
     outputs.dir(project.file("src/main/jniLibs/arm64-v8a"))
 }
+roborazzi { outputDir.set(rootProject.layout.projectDirectory.dir("../docs/pina/screenshots")) }
 tasks.named("preBuild").configure { dependsOn(buildRust) }
 
 // Use the same configuration values as About, never the checkout at copy time.
@@ -105,7 +115,7 @@ tasks.register("shareRelease") {
     group="distribution"
     description="Build a release APK named with its version, build code and source revision."
     dependsOn("assembleRelease")
-    val name="Rexling-$dateVersion-build${android.defaultConfig.versionCode}-$revision${if(modified) "-modified" else ""}-arm64-release.apk"
+    val name="Pina-$dateVersion-build${android.defaultConfig.versionCode}-$revision${if(modified) "-modified" else ""}-arm64-release.apk"
     val source=layout.buildDirectory.file("outputs/apk/release/app-release.apk")
     val target=rootProject.layout.projectDirectory.file("dist/$name")
     val checksum=rootProject.layout.projectDirectory.file("dist/$name.sha256")

@@ -35,7 +35,7 @@ def main():
     version_name = re.search(r"(?m)^package: .*versionName='([^']*)'", badging).group(1)
     version_code = int(re.search(r"(?m)^package: .*versionCode='([0-9]+)'", badging).group(1))
     label = re.search(r"(?m)^application-label:'([^']*)'$", badging).group(1)
-    assert label == "Rexling", label
+    assert label == "Pina", label
     expected = {f"Java_dev_shulhi_rex_NativeBridge_{name}" for name in ["create", "command", "poll", "awaitUpdate", "readUpdate", "destroy", "uploadCreate", "uploadPoll", "uploadDestroy", "forwardCreate", "forwardPoll", "forwardDestroy", "networkCommand"]}
     libraries = []
     profiles = []
@@ -59,7 +59,7 @@ def main():
     assert any(item["name"].endswith("libc++_shared.so") for item in libraries)
     assert any(item["name"].endswith("librex_network.so") for item in libraries)
     manifest = run([sdk / "cmdline-tools/latest/bin/apkanalyzer", "manifest", "print", apk])
-    assert 'package="dev.shulhi.rex"' in manifest
+    assert 'package="dev.jdlegaspi.pina"' in manifest
     debuggable='android:debuggable="true"' in manifest
     if args.require_release:
         assert not debuggable,"Release must not be debuggable"

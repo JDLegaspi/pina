@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 
 @Composable internal fun EmptyServerContent(onAdd: ()->Unit) {
     Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Text("Welcome to Rexling",style=SettingsType.title)
+        Text("Welcome to Pina",style=SettingsType.title)
         Text("Add a Rex server to get started. Choose your phone’s network or built-in Tailscale during setup.",style=SettingsType.body,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Button(onClick=onAdd) {ChromeSymbol(ChromeIcon.ADD,Modifier.size(18.dp),color=LocalContentColor.current);Spacer(Modifier.width(6.dp));Text("Add server")}
     }
@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
     var editor by remember {mutableStateOf(false)}
     ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
         containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,tonalElevation=0.dp,dragHandle=null,contentWindowInsets={WindowInsets(0,0,0,0)}) {
-        Column(Modifier.drawerFrost(hazeState,BottomSheetDefaults.ExpandedShape).fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
+        Column(Modifier.sheetSurface().fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
             DrawerHandle()
             Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=16.dp,end=4.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text("Servers",Modifier.weight(1f),style=SettingsType.row,fontWeight=FontWeight.Bold)
@@ -83,15 +83,15 @@ import kotlinx.coroutines.launch
     if(editor) ServerEditor(editing,onClose={editor=false},onSave={label,endpoint,icon->model.saveServer(editing?.id,label,endpoint,icon)})
 }
 
-@Composable internal fun ServerEditor(server: ServerProfile?,onClose: ()->Unit,onSave: (String,String,ServerIcon)->String?) {
+@Composable internal fun ServerEditor(server: ServerProfile?,onClose: ()->Unit,onSave: (String,String,ServerIcon)->String?,draft: ServerProfile?=server) {
     val networkStatus by NetworkSettings.status.collectAsState()
     val tailnetConnected=networkStatus.optJSONObject("tailscale")?.optString("BackendState")=="Running"
-    var name by remember(server?.id) {mutableStateOf(server?.label.orEmpty())}
-    var endpoint by remember(server?.id) {mutableStateOf(server?.endpoint.orEmpty())}
-    var icon by remember(server?.id) {mutableStateOf(server?.icon ?: ServerIcon.GLOBE)}
+    var name by remember(server?.id) {mutableStateOf(draft?.label.orEmpty())}
+    var endpoint by remember(server?.id) {mutableStateOf(draft?.endpoint.orEmpty())}
+    var icon by remember(server?.id) {mutableStateOf(draft?.icon ?: ServerIcon.GLOBE)}
     var error by remember {mutableStateOf<String?>(null)}
-    var route by remember(server?.id) {mutableStateOf(NetworkSettings.route(server?.endpoint.orEmpty()))}
-    var selectedKey by remember(server?.id) {mutableStateOf(NetworkSettings.selectedKey(server?.endpoint.orEmpty()))}
+    var route by remember(server?.id) {mutableStateOf(NetworkSettings.route(draft?.endpoint.orEmpty()))}
+    var selectedKey by remember(server?.id) {mutableStateOf(NetworkSettings.selectedKey(draft?.endpoint.orEmpty()))}
     var routesOpen by remember {mutableStateOf(false)}
     var networkOpen by remember {mutableStateOf(false)}
     var busy by remember {mutableStateOf(false)}

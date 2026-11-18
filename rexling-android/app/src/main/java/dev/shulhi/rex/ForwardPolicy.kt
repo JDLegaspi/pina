@@ -3,7 +3,7 @@ package dev.shulhi.rex
 import java.net.URI
 
 internal enum class PortConflictPolicy(val label: String) {
-    ASK("Ask each time"),AUTO("Choose another phone port"),REPLACE("Stop the other Rexling forward");
+    ASK("Ask each time"),AUTO("Choose another phone port"),REPLACE("Stop the other Pina forward");
     companion object {fun decode(value: String?)=entries.firstOrNull {it.name==value} ?: ASK}
 }
 internal data class LoopbackLink(val original: String,val host: String,val port: Int) {

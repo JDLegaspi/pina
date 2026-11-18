@@ -9,3 +9,4 @@
 *.stream
 *.trace.jsonl
 rexling-core/probe/evidence/private/
+docs/pina/evidence/

@@ -486,11 +486,19 @@ internal class RexConnection(application: Application, private val scope: Corout
         resetModifiers()
         try {view.flushComposingText()} finally {controlModifier=control;altModifier=alt;shiftState=shift}
     }
+    private val prompts=mutableMapOf<String,PromptState>()
+    /** A pane Pina has not typed into yet counts as an empty prompt. */
+    fun promptState(block: String): PromptState = prompts[block] ?: PromptState.EMPTY
+    private fun notePrompt(event: PromptEvent) {
+        val block=state.value.selectedBlock
+        if(block.isNotBlank()) prompts[block]=PromptLine.reduce(promptState(block),event)
+    }
     fun type(text: String) {
         if (!visible || !state.value.controlled || state.value.creating || navigationRequest.pending || text.isEmpty()) return
         flushImeComposition()
         val input = TerminalInput.modified(text, controlModifier, altModifier, shiftModifier)
         controlModifier = false; altModifier = false;shiftState=shiftState.consume();keyboardRequest=""
+        notePrompt(PromptEvent.Keys(input))
         command("input", "text" to input,"session" to state.value.selectedSession,"block" to state.value.selectedBlock,"navigationId" to state.value.navigationId,"connectionEpoch" to state.value.connectionEpoch)
     }
     fun scrollPrompt(direction: Int) {
@@ -502,7 +510,7 @@ internal class RexConnection(application: Application, private val scope: Corout
     fun scroll(lines: Int) {if(!navigationRequest.pending && state.value.screen!=null) command("scroll","block" to state.value.selectedBlock,"lines" to lines)}
     fun scrollToBottom() {if(!navigationRequest.pending && state.value.screen!=null) command("scroll","block" to state.value.selectedBlock,"bottom" to true)}
     fun key(name: String) = type(TerminalInput.key(name))
-    fun paste(text: String) { if (visible && state.value.controlled && !navigationRequest.pending) {flushImeComposition();command("paste", "text" to text,"session" to state.value.selectedSession,"block" to state.value.selectedBlock,"navigationId" to state.value.navigationId,"connectionEpoch" to state.value.connectionEpoch)} }
+    fun paste(text: String) { if (visible && state.value.controlled && !navigationRequest.pending) {flushImeComposition();notePrompt(PromptEvent.Paste);command("paste", "text" to text,"session" to state.value.selectedSession,"block" to state.value.selectedBlock,"navigationId" to state.value.navigationId,"connectionEpoch" to state.value.connectionEpoch)} }
     fun resize(columns: Int, rows: Int) {
         val size = columns.coerceIn(1, 512) to rows.coerceIn(1, 256)
         lastSize = size

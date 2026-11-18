@@ -19,7 +19,7 @@ class ForwardNoticeUiTest {
         val original=PortForwards.linkNotice
         try {
             ui.runOnIdle {PortForwards.linkNotice=ForwardLinkNotice("preview","Shipyard · 4321 → 4321","http://127.0.0.1:4321/")}
-            ui.setContent {RexTheme(false,ThemeCatalog.defaults[1]) {Surface(Modifier.fillMaxSize()) {Box(Modifier.fillMaxSize()) {ForwardLinkUi(Modifier.align(Alignment.BottomEnd))}}}}
+            ui.setContent {PinaTheme(false) {Surface(Modifier.fillMaxSize()) {Box(Modifier.fillMaxSize()) {ForwardLinkUi(Modifier.align(Alignment.BottomEnd))}}}}
             ui.onNodeWithContentDescription("Open forwarded link").assertIsDisplayed()
             ui.onNodeWithContentDescription("Copy forwarded link").assertIsDisplayed()
             val bounds=ui.onNodeWithContentDescription("Open forwarded link").getUnclippedBoundsInRoot()
