@@ -139,6 +139,12 @@ class RexModel @JvmOverloads constructor(application: Application, preferenceNam
         minimizeFloatingPanes=value
         preferences.edit {putBoolean("minimize_floating_panes",value)}
     }
+    internal var controlItems by mutableStateOf(ControlShortcutConfig.restore(preferences.getString("control_shortcut_items",null)))
+        private set
+    internal fun saveControlShortcuts(text: String): String? = runCatching {
+        val items=ControlShortcutConfig.parse(text)
+        controlItems=items;preferences.edit {putString("control_shortcut_items",ControlShortcutConfig.editorText(items))}
+    }.exceptionOrNull()?.message
     internal var toolbarKeys by mutableStateOf(ToolbarLayout.decode(preferences.getString("keyboard_toolbar",null)))
         private set
     internal fun changeToolbar(keys: List<ToolbarKey>) {

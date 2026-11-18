@@ -1166,3 +1166,26 @@ The toolbar uses the existing Ctrl shortcut, Shift press/release, joystick and
 keyboard components. Changing the layout does not recreate the terminal input
 view or change its keyboard configuration. The expanded function/navigation keys
 remain available independently of the chosen primary buttons.
+
+## Custom Ctrl shortcut buttons
+
+Preferences → Ctrl shortcut buttons shows an editable list with key chips.
+Add shortcut opens a key recorder; Ctrl is assumed for the first key. The
+recorder accepts typed or hardware keys, exposes special-key buttons, and
+supports optional names, Undo, Clear and Cancel. The keyboard Done action records
+Enter. Rows can be edited, removed or held and dragged to reorder. The list
+position survives editing. Changes stay in a draft until the list is saved.
+The stored format remains a validated, labeled sequence per line, optionally
+`Name = keys`, preserving previously saved entries. The first key receives Ctrl automatically;
+following `+`-separated keys are plain unless explicitly prefixed Ctrl or Shift.
+`L` sends form feed (Ctrl+L), `Space + L` sends NUL followed by lowercase l,
+and `Space + Ctrl + L` sends NUL followed by form feed. Space has an explicit
+NUL mapping rather than relying on the generic text-modifier helper. Named
+navigation/function keys use the existing terminal key encoder.
+
+Existing installations retain their ten default shortcuts. Larger custom lists
+use twelve-cell pages; the popup's hold/double-tap and trigger-close behavior is
+preserved. Changing the input target or configuration closes the popup. The
+connection validates the sequence and captured pane target before sending the
+whole sequence in one input command, clearing latched modifiers first. Invalid
+editor contents do not replace saved settings.

@@ -554,7 +554,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
 }
 
 @Composable internal fun KeyboardBar(controlled: Boolean,enabled: Boolean,control: Boolean,alt: Boolean,shift: Boolean,
-    keyboardVisible: Boolean,onControl: ()->Unit,onAlt: ()->Unit,onShift: ()->Unit,onShiftPress: ()->Unit,onShiftRelease: (Boolean)->Unit,onKey: (String)->Unit,readable: Boolean=enabled,onControlShortcut: (String)->Unit={},inputKey: String="",shortcutGesture: ControlShortcutGesture=ControlShortcutGesture.HOLD,arrowJoystickEnabled: Boolean=true,onPaste: (() ->Unit)?=null,onPrompt: ((Int)->Unit)?=null,toolbarKeys: List<ToolbarKey> = ToolbarLayout.defaults,onKeyboard: ()->Unit) {
+    keyboardVisible: Boolean,onControl: ()->Unit,onAlt: ()->Unit,onShift: ()->Unit,onShiftPress: ()->Unit,onShiftRelease: (Boolean)->Unit,onKey: (String)->Unit,readable: Boolean=enabled,onControlShortcut: (String)->Unit={},inputKey: String="",shortcutGesture: ControlShortcutGesture=ControlShortcutGesture.HOLD,arrowJoystickEnabled: Boolean=true,onPaste: (() ->Unit)?=null,onPrompt: ((Int)->Unit)?=null,toolbarKeys: List<ToolbarKey> = ToolbarLayout.defaults,controlItems: List<ControlShortcut> = ControlShortcutConfig.defaults,onKeyboard: ()->Unit) {
     val toolbar=ToolbarLayout.normalize(toolbarKeys)
     var expanded by remember {mutableStateOf(false)}
     // The extra-key trigger lives just before Esc, outside the initial viewport.
@@ -581,7 +581,7 @@ internal val MonoUi = FontFamily(Font(R.font.jetbrains_mono_regular),Font(R.font
                     Row(Modifier.width(visibleWidth).fillMaxHeight(),horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
                         toolbar.forEach {item->key(item.id) {
                             when(item) {
-                                ToolbarKey.CONTROL->ControlDockKey(controlled,control,readable,Modifier.weight(1f),onControl,onControlShortcut,shortcutGesture)
+                                ToolbarKey.CONTROL->ControlDockKey(controlled,control,readable,Modifier.weight(1f),onControl,onControlShortcut,shortcutGesture,controlItems,inputKey)
                                 ToolbarKey.ALT->DockKey("alt",controlled,alt,description="Alt",modifier=Modifier.weight(1f),icon=ChromeIcon.ALT,readable=readable,onClick=onAlt)
                                 ToolbarKey.SHIFT->ShiftDockKey(controlled,shift,Modifier.weight(1f),onShift,onShiftPress,onShiftRelease,readable=readable)
                                 ToolbarKey.ARROWS->ArrowJoystickDockKey(controlled,Modifier.weight(1f),onKey,readable,inputKey,keyboardVisible,arrowJoystickEnabled,onPrompt)
