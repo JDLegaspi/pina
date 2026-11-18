@@ -105,11 +105,14 @@ class TerminalView(context: Context) : View(context) {
     var screen: TerminalScreen?
         get()=currentScreen
         set(value) {setScreen(value,false)}
+    internal var allowHiddenCursorInput: Boolean=false
+        set(value) {if(field!=value) {field=value;reportCursorViewport()}}
+    private fun inputCursorRow(frame: TerminalScreen)=frame.cursorY ?: frame.cursorAnchorY.takeIf {allowHiddenCursorInput && frame.cursorAnchorX!=null}
     internal var onKeyboardFocus: (TerminalKeyboardFocus?)->Unit={}
     internal val keyboardFocus: TerminalKeyboardFocus? get() {
         val frame=screen ?: return null
         if(frame.scroll.below>0) return null
-        val row=frame.cursorY?.takeIf {it in 0 until frame.rows} ?: return null
+        val row=inputCursorRow(frame)?.takeIf {it in 0 until frame.rows} ?: return null
         val lastText=frame.lines.indexOfLast {cells->cells.any {cell->cell.width>0 && cell.text.any {it!='\u0000' && !it.isWhitespace()}}}
         val bottom=insetTop+(row+1)*cellHeight+insetBottom
         return TerminalKeyboardFocus(insetTop+row*cellHeight,bottom,
@@ -577,14 +580,14 @@ class TerminalView(context: Context) : View(context) {
             super.performClick()
             onMouseClick(col,row,cellWidth.roundToInt().coerceAtLeast(1),cellHeight.roundToInt().coerceAtLeast(1))
             if(frame.isSemanticInputRow(row)) keyboard()
-            else if(frame.cursorX!=null && row==frame.cursorY) onCursorTap()
+            else if(row==inputCursorRow(frame)) onCursorTap()
         } else if(controlled && frame?.hasSemanticPrompt==true) {
             val row=floor((y-insetTop)/cellHeight).toInt()
             if(pressedMouseTarget!=mouseTarget() || pressedMouseGrid!=(frame.columns to frame.rows) ||
                 x<insetHorizontal || x>=width-insetHorizontal || y<insetTop || y>=height-insetBottom) return
             super.performClick()
             if(frame.isSemanticInputRow(row)) keyboard()
-            else if(frame.scroll.below==0L && frame.cursorX!=null && row==frame.cursorY) onCursorTap()
+            else if(frame.scroll.below==0L && row==inputCursorRow(frame)) onCursorTap()
         } else performClick()
     }
     internal fun copySemanticSelection(output: Boolean): Boolean {

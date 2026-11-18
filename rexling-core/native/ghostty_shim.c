@@ -12,7 +12,7 @@ typedef struct {
   uint64_t scroll_total, scroll_offset, scroll_visible;
   uint8_t input_flags;
   uint16_t overscan_above, overscan_below;
-  uint8_t cursor_style, cursor_blinking;
+  uint8_t cursor_style, cursor_blinking, cursor_has_position;
 } RpFrame;
 /* Overscan rows keep a distinct y above any real grid row:
    RP_ABOVE|k is k rows over the viewport (k>=1), RP_BELOW|k is k rows
@@ -442,7 +442,8 @@ int rp_frame(RpTerminal *t, RpFrame *frame, CellFn callback, void *userdata) {
   GhosttyRenderStateOverscan captured={0};
   GET(GHOSTTY_RENDER_STATE_DATA_OVERSCAN,&captured);
   frame->overscan_above=captured.above;frame->overscan_below=captured.below;
-  frame->cursor_x=cursor.viewport_x; frame->cursor_y=cursor.viewport_y;
+  frame->cursor_has_position=cursor.viewport_has_value;
+  frame->cursor_x=cursor.viewport_has_value?cursor.viewport_x:0; frame->cursor_y=cursor.viewport_has_value?cursor.viewport_y:0;
   frame->cursor_visible=cursor.visible && cursor.viewport_has_value;
   frame->cursor_style=(uint8_t)cursor.visual_style;frame->cursor_blinking=cursor.blinking;
   // A restored terminal can have command boundaries while its cursor is in output.

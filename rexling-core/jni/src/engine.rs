@@ -1877,7 +1877,7 @@ fn frame_value(frame: &Frame) -> Value {
             ])
         })
         .collect();
-    json!({"columns":frame.columns,"rows":frame.rows,"scrollbar":[frame.scroll_total,frame.scroll_offset,frame.scroll_visible],"input_flags":frame.input_flags,"cursor":frame.cursor,"foreground":rgb(frame.foreground),"background":rgb(frame.background),"cells":cells})
+    json!({"columns":frame.columns,"rows":frame.rows,"scrollbar":[frame.scroll_total,frame.scroll_offset,frame.scroll_visible],"input_flags":frame.input_flags,"cursor":frame.cursor,"cursor_position":frame.cursor_position,"foreground":rgb(frame.foreground),"background":rgb(frame.background),"cells":cells})
 }
 
 #[cfg(test)]

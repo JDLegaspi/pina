@@ -113,6 +113,7 @@ internal class RexConnection(application: Application, private val scope: Corout
                 "columns" to frame.columns,"rows" to frame.rows,"scrollTotal" to frame.scroll.total,
                 "scrollOffset" to frame.scroll.offset,"viewport" to frame.plainText(),"col" to col,"row" to row,"output" to output)
         }
+        view.allowHiddenCursorInput=current.programs[block]?.kind in setOf(ProgramKind.CODEX,ProgramKind.CLAUDE)
         view.onCursorTap={
             val active=state.value
             // Program identity must be live, not the last-known chrome cache.

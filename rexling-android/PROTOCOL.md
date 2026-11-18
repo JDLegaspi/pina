@@ -1268,3 +1268,20 @@ fields. Imported files are bounded at 128 KiB. A new key is added to the library
 and selected in the server draft; the endpoint binding changes only on Save &
 connect. A failed server save restores the previous route and key selection.
 Adding an unassigned key or renaming one does not reconfigure/retry connections.
+
+
+## Hidden TUI cursor input anchors (RXT7)
+
+Ghostty's cursor viewport position and its visible cursor glyph are separate.
+The native frame retains `cursor_position` whenever the position is in the
+viewport, even with DEC mode 25 disabled; the existing `cursor` remains absent
+when the glyph must not be painted. RXT7 appends this optional coordinate pair to
+each full/delta frame after image placements. Android still accepts RXT1–RXT6,
+and validates RXT7 positions against the frame grid before committing a packet.
+
+For a live foreground Claude/Codex pane, TerminalView can use this hidden
+position as its input-row tap target and IME pan anchor. Mouse reporting still
+forwards the original click, with the existing target/ownership/grid guards.
+The input anchor never draws or blinks a cursor. Hidden positions are not used
+for other programs, including Neovim, or while viewing scrollback; existing
+viewport stabilization and keyboard/PTY sizing behavior are unchanged.

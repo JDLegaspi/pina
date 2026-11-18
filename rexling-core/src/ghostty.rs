@@ -30,6 +30,7 @@ struct RawFrame {
     overscan_below: u16,
     cursor_style: u8,
     cursor_blinking: u8,
+    cursor_has_position: u8,
 }
 const ROW_ABOVE: u16 = 0xFF00;
 const ROW_BELOW: u16 = 0xFE00;
@@ -105,6 +106,8 @@ pub struct Frame {
     pub columns: u16,
     pub rows: u16,
     pub cursor: Option<(u16, u16)>,
+    /// Viewport position even when the application hides its cursor glyph.
+    pub cursor_position: Option<(u16,u16)>,
     pub cursor_style: u8,
     pub cursor_blinking: bool,
     pub foreground: [u8; 3],
@@ -427,6 +430,7 @@ impl Terminal {
             columns: raw.columns,
             rows: raw.rows,
             cursor: (raw.cursor_visible != 0).then_some((raw.cursor_x, raw.cursor_y)),
+            cursor_position: (raw.cursor_has_position != 0).then_some((raw.cursor_x,raw.cursor_y)),
             cursor_style: raw.cursor_style,
             cursor_blinking: raw.cursor_blinking != 0,
             foreground: raw.foreground,
@@ -653,6 +657,17 @@ mod tests {
         let terminal=replica.terminal().unwrap();terminal.scroll_viewport(-10000);
         let frame=terminal.frame().unwrap();
         assert!(frame.images.iter().any(|p|p.image.id==41));
+    }
+    #[test] fn hidden_tui_cursor_keeps_its_input_position_without_becoming_visible() {
+        let mut terminal=Terminal::new(40,12).unwrap();
+        terminal.write(b"\x1b[?1049h\x1b[?1000h\x1b[?1006h\x1b[9;3H\x1b[?25l").unwrap();
+        let frame=terminal.frame().unwrap();
+        assert!(frame.cursor.is_none());assert_eq!(frame.cursor_position,Some((2,8)));
+        let mut replica=Replica::new(1);replica.feed(&terminal.encode().unwrap()).unwrap();
+        let restored=replica.terminal().unwrap().frame().unwrap();
+        assert!(restored.cursor.is_none());assert_eq!(restored.cursor_position,Some((2,8)));
+        terminal.write(b"\x1b[?25h").unwrap();let visible=terminal.frame().unwrap();
+        assert_eq!(visible.cursor,Some((2,8)));assert_eq!(visible.cursor_position,visible.cursor);
     }
     #[test] fn program_cursor_shapes_and_blink_modes_reach_frames() {
         let mut terminal=Terminal::new(20,5).unwrap();
