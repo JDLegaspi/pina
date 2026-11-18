@@ -1189,3 +1189,32 @@ preserved. Changing the input target or configuration closes the popup. The
 connection validates the sequence and captured pane target before sending the
 whole sequence in one input command, clearing latched modifiers first. Invalid
 editor contents do not replace saved settings.
+
+## Structured Neovim shortcut editor
+
+Neovim shortcut preferences show shortcut rows and one-level group rows instead
+of a raw document. Add group creates a named draft group; groups open their own
+lists and can be renamed, reordered as a unit, or ungrouped while keeping their
+shortcuts. Individual shortcuts can be moved with a group picker. Empty draft
+groups remain visible and must be filled or removed before saving, rather than
+silently disappearing. The backend's existing JSON format and execution policy
+are unchanged; migration preserves root menu order and each group's key order.
+
+Add/edit shortcut offers Command and Key sequence modes. Commands have a colon
+prefix and retain automatic Enter execution. Key sequences record literal keys,
+case and special-key tokens, with Ctrl/Alt applied only when requested. Space,
+Tab, Esc, Enter and arrows have explicit recorder buttons; Undo removes a whole
+token. Names and group assignment have separate controls. Complex commands must
+round-trip exactly through the legacy serializer; ambiguous unnamed assignments
+require a name instead of silently changing their keys.
+
+The main editor keeps the enable switch, while Menu appearance contains layout,
+opening effect and haptics settings. The editor uses fixed drawer chrome, keeps
+its list position through edits, and saves the shortcut/group draft atomically.
+
+The editor displays a collapsible Ungrouped section, expanded by default,
+separately from named Groups. This is a visual editor section, not a persisted
+group or submenu. The group picker uses Ungrouped for direct menu entries.
+Reordering within either root section preserves the other section's original
+menu positions; merely opening, collapsing or saving the editor does not
+canonicalize the wheel/grid's root order.
